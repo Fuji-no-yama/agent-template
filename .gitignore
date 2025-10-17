@@ -1,7 +1,7 @@
 # added content
-.devcontainer/*
+# .devcontainer/*
 .venv/*
-.vscode/*
+# .vscode/*
 tmp/*
 uv.lock
 .DS_Store
