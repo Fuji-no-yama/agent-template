@@ -7,7 +7,7 @@ services:
       context: ..
       dockerfile: .devcontainer/Dockerfile.work
     environment:
-      PYTHONPATH: /workspace/code
+      PYTHONPATH: /workspace
       UV_LINK_MODE: copy
     volumes:
       - ..:/workspace
