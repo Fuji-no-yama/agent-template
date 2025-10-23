@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from agent_template._type.history import History
 from agent_template._type.llm_responce import LLMResponse
+from agent_template.history.history import History
 
 
 class LLMInterface(ABC):
