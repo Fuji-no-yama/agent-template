@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 import re
-from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, TypeVar, final, get_type_hints
 
@@ -22,7 +21,7 @@ def tool(*, use_docstring: bool = True) -> Callable[[F], F]:
     return deco
 
 
-class BaseTool(ABC):
+class BaseTool:
     """
     ツールを自作するためのベースクラス
     """
@@ -89,15 +88,6 @@ class BaseTool(ABC):
             res[name] = desc
         return res
 
-    @abstractmethod
-    def to_tool_definition(self) -> dict:
-        """ツール登録に用いる定義(dict)を返します。
-
-        サブクラスはこのメソッドを実装して、LLM ツール用 API に公開する
-        呼び出し定義を返す必要があります。
-        """
-        raise NotImplementedError
-
     @final
     def get_tool_information(self) -> str:
         """
@@ -146,6 +136,7 @@ class BaseTool(ABC):
             return "{}"
         return tools[0] if len(tools) == 1 else tools
 
+    @final
     def _spec_from_fn(self, fn: Callable[..., Any]) -> dict[str, object]:
         """指定した関数からパラメータ情報と docstring を抽出して返すヘルパー。"""
         try:
@@ -178,6 +169,12 @@ class BaseTool(ABC):
             parts = re.split(r"\n\s*\n", doc.strip(), maxsplit=1)
             short = parts[0].strip()
         return {"parameters": params, "docstring": doc, "short_description": short}
+
+    @final
+    def execute_tool(self, tool_name: str, args: dict[str, Any]) -> Any:
+        """
+        指定したツール名の関数を引数付きで実行し、結果を返す。
+        """
 
 
 # 以下は具体的な実装例
@@ -224,9 +221,6 @@ class MyTool(BaseTool):
             float: 除算結果
         """
         return a / b
-
-    def to_tool_definition(self) -> dict:
-        pass
 
 
 my_tool = MyTool()
