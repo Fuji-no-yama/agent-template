@@ -8,8 +8,6 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from agent_template._other.llm.openai_llm import OpenAILLM
-
 
 class Settings(BaseSettings):
     """
@@ -23,10 +21,6 @@ class Settings(BaseSettings):
         default_factory=lambda: Path(str(files("agent_template") / "data")),
         alias="DATA_DIR",
     )
-
-    llms = {
-        "openai": OpenAILLM,
-    }
 
     # .env > init kwargs > OS env の優先順位を維持
     @classmethod
