@@ -290,6 +290,16 @@ if __name__ == "__main__":
             return a * b
 
         @tool(use_docstring=True)
+        def get_x(self) -> int:
+            """
+            xの値を取得します。
+
+            Returns:
+                int: xの値
+            """
+            return 42
+
+        @tool(use_docstring=True)
         def test_all_types(self, name: str, count: int, price: float, is_active: bool, items: list, config: dict) -> str:  # noqa: FBT001, PLR0913
             """
             全ての基本型をテストします。
