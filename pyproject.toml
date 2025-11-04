@@ -22,6 +22,7 @@ authors = [
   { name = "Your Name", email = "your@email.com" }
 ]
 dependencies = [
+  "docstring-parser>=0.17.0",
   "openai>=0.8.0",
   "pydantic>=2.12.2",
   "pydantic-settings>=2.11.0",

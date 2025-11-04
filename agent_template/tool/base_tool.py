@@ -5,6 +5,8 @@ import re
 from collections.abc import Callable
 from typing import Any, TypeVar, final, get_type_hints
 
+from docstring_parser import parse
+
 F = TypeVar("F", bound=Callable[..., Any])  # 関数型を表す型変数
 R = TypeVar("R")  # 戻り値型を表す型変数
 
@@ -112,29 +114,11 @@ class BaseTool:
 
         戻り値: {"x": "説明...", "y": "別の説明"}
         """
-        if not doc:
-            return {}
-
-        # extract the Args: block first
-        m_block = re.search(r"^\s*Args:\s*\n([\s\S]*?)(?=\n\s*\w+:|\Z)", doc, re.MULTILINE)
-        if not m_block:
-            return {}
-        block = m_block.group(1)
-
-        # match each parameter and its (possibly multiline) description
-        param_re = re.compile(
-            r"^\s{4,}([A-Za-z0-9_]+)(?:\s*\([^\)]*\))?\s*:\s*(.*?)(?=^\s{4,}[A-Za-z0-9_]+(?:\s*\([^\)]*\))?\s*:|\Z)",
-            re.MULTILINE | re.DOTALL,
-        )
-
-        res: dict[str, str] = {}
-        for m in param_re.finditer(block):
-            name = m.group(1)
-            desc = m.group(2)
-            # normalize whitespace and strip
-            desc = re.sub(r"\s+", " ", desc).strip()
-            res[name] = desc
-        return res
+        ret_dict = {}
+        parsed = parse(doc)
+        for p in parsed.params:
+            ret_dict[p.arg_name] = p.description
+        return ret_dict
 
     @final
     def get_tool_information(self) -> list[dict]:
