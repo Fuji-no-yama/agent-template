@@ -178,10 +178,10 @@ class BaseTool:
                     "args": params,
                 }
                 tools.append(tool_info)
-
         if not tools:
-            return "{}"
-        return tools[0] if len(tools) == 1 else tools
+            err_msg = f"{type(self).__name__} にツール関数が見つかりません。"
+            raise ValueError(err_msg)
+        return tools
 
     @final
     def _spec_from_fn(self, fn: Callable[..., Any]) -> dict[str, object]:
