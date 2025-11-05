@@ -117,7 +117,7 @@ class BaseTool:
         ret_dict = {}
         parsed = parse(doc)
         for p in parsed.params:
-            ret_dict[p.arg_name] = p.description
+            ret_dict[p.arg_name] = f"{p.description}:(python type: {p.type_name})"
         return ret_dict
 
     @final

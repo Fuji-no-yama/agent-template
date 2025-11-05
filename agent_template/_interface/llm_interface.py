@@ -7,13 +7,23 @@ from agent_template.tool.base_tool import BaseTool
 
 
 class LLMInterface(ABC):
+    """
+    LLMインターフェースの抽象基底クラス
+    具体的なLLMプロバイダーごとにこのクラスを継承して実装する
+
+    Attributes:
+        model (str): 使用するLLMモデルの名前
+        temperature (float): 応答のランダム性を制御する値
+    """
+
+    model: str
+    temperature: float
+
     @abstractmethod
     async def chat_with_history(
         self,
         history: History,
         *,
-        model: str,
-        temperature: float = 1.0,
         top_p: float = 1.0,
         max_tokens: int = 1024,
     ) -> LLMResponse:
@@ -38,8 +48,6 @@ class LLMInterface(ABC):
         self,
         history: History,
         *,
-        model: str,
-        temperature: float = 1.0,
         top_p: float = 1.0,
         max_tokens: int = 1024,
         tools: list[BaseTool],

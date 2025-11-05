@@ -5,6 +5,12 @@ import json
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
+from agent_template._interface.llm_interface import LLMInterface
+from agent_template._other.config.settings import settings
+from agent_template._other.exception.exception import RetryableError
+from agent_template._type.llm_responce import LLMResponse
+from agent_template.history.history import History
+from agent_template.tool.base_tool import BaseTool, tool
 from openai import (
     APIConnectionError,
     AsyncOpenAI,
@@ -17,13 +23,6 @@ from tenacity import (
     wait_fixed,
 )
 
-from agent_template._interface.llm_interface import LLMInterface
-from agent_template._other.config.settings import settings
-from agent_template._other.exception.exception import RetryableError
-from agent_template._type.llm_responce import LLMResponse
-from agent_template.history.history import History
-from agent_template.tool.base_tool import BaseTool, tool
-
 if TYPE_CHECKING:
     from openai.types.responses import Response
 
@@ -35,8 +34,9 @@ def _llm_client() -> AsyncOpenAI:  # キャッシュを使用するためモジ�
 
 
 class OpenAILLM(LLMInterface):
-    def __init__(self) -> None:
-        pass
+    def __init__(self, model: str | None = "gpt-4.1", temperature: float | None = 0.0) -> None:
+        self.model = model
+        self.temperature = temperature
 
     @retry(
         retry=retry_if_exception_type(RetryableError),
@@ -48,14 +48,12 @@ class OpenAILLM(LLMInterface):
         self,
         history: History,
         *,
-        model: str | None = "gpt-4.1",
-        temperature: float = 1.0,
         top_p: float = 1.0,
     ) -> LLMResponse:
         params: dict[str, Any] = {
-            "model": model,
+            "model": self.model,
             "input": history.content,
-            "temperature": temperature,
+            "temperature": self.temperature,
             "top_p": top_p,
         }
         try:
@@ -82,8 +80,6 @@ class OpenAILLM(LLMInterface):
         self,
         history: History,
         *,
-        model: str | None = "gpt-4.1",
-        temperature: float = 1.0,
         top_p: float = 1.0,
         tools: list[BaseTool],
     ) -> list[LLMResponse]:
@@ -114,9 +110,9 @@ class OpenAILLM(LLMInterface):
                     },
                 )
         params: dict[str, Any] = {
-            "model": model,
+            "model": self.model,
             "input": history.content,
-            "temperature": temperature,
+            "temperature": self.temperature,
             "top_p": top_p,
             "tools": tool_for_param,
         }

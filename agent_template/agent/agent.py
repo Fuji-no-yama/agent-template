@@ -1,9 +1,12 @@
 import asyncio
 import json
+import os
+from pathlib import Path
 from typing import Any
 
 from agent_template._interface.llm_interface import LLMInterface
 from agent_template._other.config.settings import settings
+from agent_template._other.util import get_logger
 from agent_template._type.llm_responce import LLMResponse
 from agent_template.history.history import History
 from agent_template.tool.base_tool import BaseTool
@@ -15,24 +18,37 @@ class Agent:
     """
 
     llm: LLMInterface
-    system_prompt: str
+    tools: list[BaseTool]
+    log_dir: Path
 
-    def __init__(self, tools: list[BaseTool], llm: LLMInterface) -> None:
+    def __init__(self, tools: list[BaseTool], llm: LLMInterface, log_dir: os.PathLike) -> None:
+        """
+        エージェントオブジェクトを作成する。
+
+        Args:
+            tools (list[BaseTool]): エージェントが使用するツールのリスト
+            llm (LLMInterface): エージェントが使用するLLMインターフェース
+            log_dir (os.PathLike): エージェントのログを保存するディレクトリパス
+        """
         self.llm = llm
         self.tools = tools
+        self.log_dir = Path(log_dir)
 
-    def execute_task(self, system_prompt: str, task: str) -> str:
+    def execute_task(self, system_prompt: str, task: str, *, use_log: bool = False) -> str:
         """
         エージェントとしてツールを使いながらタスクを実行する
 
         Args:
             system_prompt (str): システムプロンプト
             task (str): ユーザからのタスク
+            use_log (bool): ログを記録するかどうか
 
         Returns:
             str: タスクへの最終応答
         """
         history = History(content=[])
+        if use_log:
+            logger = get_logger(self.log_dir, file_prefix="execute_task")
         history.add_system_message(content=system_prompt)
         history.add_user_message(content=task)
         while True:
@@ -45,8 +61,10 @@ class Agent:
             current_history = responses[-1].return_history  # 最終の履歴を取得
             for resp in responses:
                 if not resp.is_tool_call:
+                    logger.info(f"[最終応答]: {resp.content}") if use_log else None
                     return resp.content  # 最終応答を返す
                 tool_res = self._execute_tool(resp)  # ツールを実行
+                logger.info(f"[ツール実行]:\nname->{resp.tool_name}\nargs->{resp.tool_args}\nresult->{tool_res}") if use_log else None
                 current_history = self.llm.set_tool_result(
                     history=current_history,
                     tool_name=resp.tool_name,
@@ -54,7 +72,7 @@ class Agent:
                     result=tool_res,
                 )
 
-    def execute_complex_task(self, system_prompt: str, task: str) -> str:
+    def execute_complex_task(self, system_prompt: str, task: str, *, use_log: bool = False) -> str:
         """
         エージェントとしてツールを使いながらタスクを実行する。(計画策定ステップ・実行ステップに分解)
 
@@ -66,6 +84,8 @@ class Agent:
             str: タスクへの最終応答
         """
         go_to_next_step = False
+        if use_log:
+            logger = get_logger(self.log_dir, file_prefix="execute_complex_task")
         with (settings.data_dir / "prompt" / "complex_task_planning.prompt").open("r", encoding="utf-8") as f:
             planning_prompt = f.read()
         while not go_to_next_step:
@@ -83,8 +103,7 @@ class Agent:
             for resp in responses:
                 if not resp.is_tool_call:
                     go_to_next_step = True
-                    print("計画ステップ:\n", resp.content)
-                    print("==============================")
+                    logger.info(f"[計画ステップ最終応答]: {resp.content}") if use_log else None
                     break
                 else:
                     break  # ツールが呼び出されてしまった場合は再度計画ステップを実行
@@ -100,8 +119,10 @@ class Agent:
             current_history = responses[-1].return_history  # 最終の履歴を取得
             for resp in responses:
                 if not resp.is_tool_call:
+                    logger.info(f"[実行ステップ最終応答]: {resp.content}") if use_log else None
                     return resp.content  # 最終応答を返す
                 tool_res = self._execute_tool(resp)  # ツールを実行
+                logger.info(f"[ツール実行]:\nname->{resp.tool_name}\nargs->{resp.tool_args}\nresult->{tool_res}") if use_log else None
                 current_history = self.llm.set_tool_result(
                     history=current_history,
                     tool_name=resp.tool_name,
@@ -114,4 +135,8 @@ class Agent:
         tool_args = llm_response.tool_args
         for tool_instance in self.tools:
             if tool_instance.has_tool(tool_name):
-                return json.dumps(tool_instance.execute_tool(tool_name=tool_name, args=tool_args))
+                tool_res = tool_instance.execute_tool(tool_name=tool_name, args=tool_args)
+                if isinstance(tool_res, str):
+                    return tool_res
+                else:
+                    return json.dumps(tool_res, ensure_ascii=False)
