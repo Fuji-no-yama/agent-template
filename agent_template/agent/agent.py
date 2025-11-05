@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from logging import Logger
 from pathlib import Path
 from typing import Any
 
@@ -51,26 +52,7 @@ class Agent:
             logger = get_logger(self.log_dir, file_prefix="execute_task")
         history.add_system_message(content=system_prompt)
         history.add_user_message(content=task)
-        while True:
-            responses: list[LLMResponse] = asyncio.run(
-                self.llm.chat_with_history_tools(
-                    history=history,
-                    tools=self.tools,
-                ),
-            )
-            current_history = responses[-1].return_history  # 最終の履歴を取得
-            for resp in responses:
-                if not resp.is_tool_call:
-                    logger.info(f"[最終応答]: {resp.content}") if use_log else None
-                    return resp.content  # 最終応答を返す
-                tool_res = self._execute_tool(resp)  # ツールを実行
-                logger.info(f"[ツール実行]:\nname->{resp.tool_name}\nargs->{resp.tool_args}\nresult->{tool_res}") if use_log else None
-                current_history = self.llm.set_tool_result(
-                    history=current_history,
-                    tool_name=resp.tool_name,
-                    tool_id=resp.tool_id,
-                    result=tool_res,
-                )
+        return self._execute_llm_loop(history, use_log=use_log, logger=logger if use_log else None)
 
     def execute_complex_task(self, system_prompt: str, task: str, *, use_log: bool = False) -> str:
         """
@@ -107,8 +89,10 @@ class Agent:
                     break
                 else:
                     break  # ツールが呼び出されてしまった場合は再度計画ステップを実行
-
         history.add_system_message(content="Please perform the tasks according to the plan above.")
+        return self._execute_llm_loop(history, use_log=use_log, logger=logger if use_log else None)
+
+    def _execute_llm_loop(self, history: History, *, use_log: bool = False, logger: Logger | None = None) -> str:
         while True:
             responses: list[LLMResponse] = asyncio.run(
                 self.llm.chat_with_history_tools(
@@ -116,15 +100,18 @@ class Agent:
                     tools=self.tools,
                 ),
             )
-            current_history = responses[-1].return_history  # 最終の履歴を取得
+            history = responses[-1].return_history  # 最終の履歴を取得
             for resp in responses:
                 if not resp.is_tool_call:
                     logger.info(f"[実行ステップ最終応答]: {resp.content}") if use_log else None
                     return resp.content  # 最終応答を返す
-                tool_res = self._execute_tool(resp)  # ツールを実行
+                try:
+                    tool_res = self._execute_tool(resp)  # ツールを実行
+                except Exception as e:  # noqa: BLE001
+                    tool_res = f"Exception occurred during tool ({resp.tool_name}) execution: {e}"
                 logger.info(f"[ツール実行]:\nname->{resp.tool_name}\nargs->{resp.tool_args}\nresult->{tool_res}") if use_log else None
-                current_history = self.llm.set_tool_result(
-                    history=current_history,
+                history = self.llm.set_tool_result(
+                    history=history,
                     tool_name=resp.tool_name,
                     tool_id=resp.tool_id,
                     result=tool_res,
