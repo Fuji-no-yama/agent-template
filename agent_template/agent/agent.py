@@ -3,7 +3,6 @@ import json
 import os
 from logging import Logger
 from pathlib import Path
-from typing import Any
 
 from agent_template._interface.llm_interface import LLMInterface
 from agent_template._other.config.settings import settings
@@ -14,28 +13,31 @@ from agent_template.tool.base_tool import BaseTool
 
 
 class Agent:
-    """メモ
-    エージェントの基底クラス
+    """
+    エージェントを表すクラス
     """
 
+    who_am_i: str
     llm: LLMInterface
     tools: list[BaseTool]
     log_dir: Path
 
-    def __init__(self, tools: list[BaseTool], llm: LLMInterface, log_dir: os.PathLike) -> None:
+    def __init__(self, who_am_i: str, tools: list[BaseTool], llm: LLMInterface, log_dir: os.PathLike) -> None:
         """
         エージェントオブジェクトを作成する。
 
         Args:
+            who_am_i (str): このエージェントが何をするエージェントなのかを表す
             tools (list[BaseTool]): エージェントが使用するツールのリスト
             llm (LLMInterface): エージェントが使用するLLMインターフェース
             log_dir (os.PathLike): エージェントのログを保存するディレクトリパス
         """
+        self.who_am_i = who_am_i
         self.llm = llm
         self.tools = tools
         self.log_dir = Path(log_dir)
 
-    def execute_task(self, system_prompt: str, task: str, *, use_log: bool = False) -> str:
+    def execute_task(self, task: str, *, use_log: bool = False) -> str:
         """
         エージェントとしてツールを使いながらタスクを実行する
 
@@ -50,11 +52,11 @@ class Agent:
         history = History(content=[])
         if use_log:
             logger = get_logger(self.log_dir, file_prefix="execute_task")
-        history.add_system_message(content=system_prompt)
+        history.add_system_message(content=self.who_am_i)
         history.add_user_message(content=task)
         return self._execute_llm_loop(history, use_log=use_log, logger=logger if use_log else None)
 
-    def execute_complex_task(self, system_prompt: str, task: str, *, use_log: bool = False) -> str:
+    def execute_complex_task(self, task: str, *, use_log: bool = False) -> str:
         """
         エージェントとしてツールを使いながらタスクを実行する。(計画策定ステップ・実行ステップに分解)
 
@@ -65,6 +67,7 @@ class Agent:
         Returns:
             str: タスクへの最終応答
         """
+
         go_to_next_step = False
         if use_log:
             logger = get_logger(self.log_dir, file_prefix="execute_complex_task")
@@ -72,7 +75,7 @@ class Agent:
             planning_prompt = f.read()
         while not go_to_next_step:
             history = History(content=[])
-            history.add_system_message(content=system_prompt)
+            history.add_system_message(content=self.who_am_i)
             history.add_user_message(content=task)
             history.add_system_message(content=planning_prompt)
             responses: list[LLMResponse] = asyncio.run(
@@ -117,7 +120,7 @@ class Agent:
                     result=tool_res,
                 )
 
-    def _execute_tool(self, llm_response: LLMResponse) -> dict[str, Any]:  # LLMの出力に応じてツールを実行する内部関数
+    def _execute_tool(self, llm_response: LLMResponse) -> str:  # LLMの出力に応じてツールを実行する内部関数
         tool_name = llm_response.tool_name  # これは関数名
         tool_args = llm_response.tool_args
         for tool_instance in self.tools:

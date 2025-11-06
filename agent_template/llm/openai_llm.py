@@ -5,12 +5,6 @@ import json
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
-from agent_template._interface.llm_interface import LLMInterface
-from agent_template._other.config.settings import settings
-from agent_template._other.exception.exception import RetryableError
-from agent_template._type.llm_responce import LLMResponse
-from agent_template.history.history import History
-from agent_template.tool.base_tool import BaseTool, tool
 from openai import (
     APIConnectionError,
     AsyncOpenAI,
@@ -22,6 +16,13 @@ from tenacity import (
     stop_after_attempt,
     wait_fixed,
 )
+
+from agent_template._interface.llm_interface import LLMInterface
+from agent_template._other.config.settings import settings
+from agent_template._other.exception.exception import RetryableError
+from agent_template._type.llm_responce import LLMResponse
+from agent_template.history.history import History
+from agent_template.tool.base_tool import BaseTool, tool
 
 if TYPE_CHECKING:
     from openai.types.responses import Response
@@ -150,7 +151,7 @@ class OpenAILLM(LLMInterface):
                 )
         return ret_response
 
-    def set_tool_result(self, history: History, tool_name: str, tool_id: str, result: dict[str, Any]) -> History:
+    def set_tool_result(self, history: History, tool_name: str, tool_id: str, result: str) -> History:
         history.content.append(
             {
                 "type": "function_call_output",

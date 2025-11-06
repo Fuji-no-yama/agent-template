@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Any
 
 from agent_template._type.llm_responce import LLMResponse
 from agent_template.history.history import History
@@ -70,14 +69,14 @@ class LLMInterface(ABC):
         """
 
     @abstractmethod
-    def set_tool_result(self, history: History, tool_name: str, tool_id: str, result: dict[str, Any]) -> History:
+    def set_tool_result(self, history: History, tool_name: str, tool_id: str, result: str) -> History:
         """履歴にツールの実行結果を追加します。
 
         Args:
             history (History): チャット履歴オブジェクト
             tool_name (str): ツールの名前
             tool_id (str): ツールのID
-            result (dict[str:str]): ツールの実行結果 (例: {"result_a": 1, "result_b": 2})
+            result (str): ツールの実行結果
 
         Returns:
             History: ツールの実行結果が追加されたチャット履歴オブジェクト
