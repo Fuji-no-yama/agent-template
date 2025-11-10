@@ -3,7 +3,6 @@
 .venv/*
 # .vscode/*
 tmp/*
-uv.lock
 .DS_Store
 .env.local
 

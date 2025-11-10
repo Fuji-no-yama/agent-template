@@ -127,3 +127,11 @@ class Agent:
                     return tool_res
                 else:
                     return json.dumps(tool_res, ensure_ascii=False)
+
+    def get_total_fee(self) -> float:
+        """これまでのやり取りで発生した総費用を取得する。
+
+        Returns:
+            float: 総費用（ドル単位）
+        """
+        return self.llm.get_total_fee()

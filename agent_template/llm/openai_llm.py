@@ -5,12 +5,6 @@ import json
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
-from agent_template._interface.llm_interface import LLMInterface
-from agent_template._other.config.settings import settings
-from agent_template._other.exception.exception import RetryableError
-from agent_template._type.llm_responce import LLMResponse
-from agent_template.history.history import History
-from agent_template.tool.base_tool import BaseTool, tool
 from openai import (
     APIConnectionError,
     AsyncOpenAI,
@@ -22,6 +16,13 @@ from tenacity import (
     stop_after_attempt,
     wait_fixed,
 )
+
+from agent_template._interface.llm_interface import LLMInterface
+from agent_template._other.config.settings import settings
+from agent_template._other.exception.exception import RetryableError
+from agent_template._type.llm_responce import LLMResponse
+from agent_template.history.history import History
+from agent_template.tool.base_tool import BaseTool, tool
 
 if TYPE_CHECKING:
     from openai.types.responses import Response
@@ -35,8 +36,13 @@ def _llm_client() -> AsyncOpenAI:  # キャッシュを使用するためモジ�
 
 class OpenAILLM(LLMInterface):
     def __init__(self, model: str | None = "gpt-4.1", temperature: float | None = 0.0) -> None:
+        if model not in settings.openai_model_price:
+            err_msg = f"Unsupported model: {model}. Supported models are: {list(settings.openai_model_price.keys())}"
+            raise ValueError(err_msg)
         self.model = model
         self.temperature = temperature
+        self.output_token = 0
+        self.input_token = 0
 
     @retry(
         retry=retry_if_exception_type(RetryableError),
@@ -60,6 +66,8 @@ class OpenAILLM(LLMInterface):
             response: Response = await _llm_client().responses.create(**params)
         except (RateLimitError, APIConnectionError) as e:
             raise RetryableError(str(e)) from e
+        self.input_token += response.usage.input_tokens
+        self.output_token += response.usage.output_tokens
         ret_history = history
         ret_history.add_assistant_message(content=response.output_text)
         return LLMResponse(
@@ -120,6 +128,8 @@ class OpenAILLM(LLMInterface):
             response: Response = await _llm_client().responses.create(**params)
         except (RateLimitError, APIConnectionError) as e:
             raise RetryableError(str(e)) from e
+        self.input_token += response.usage.input_tokens
+        self.output_token += response.usage.output_tokens
         ret_history = history
         ret_response: list[LLMResponse] = []
 
@@ -163,6 +173,20 @@ class OpenAILLM(LLMInterface):
             },
         )
         return history
+
+    def get_total_fee(self) -> float:
+        return (
+            self.input_token
+            * settings.openai_model_price.get(
+                self.model,
+                {"input": 0.0, "output": 0.0},
+            )["input"]
+            + self.output_token
+            * settings.openai_model_price.get(
+                self.model,
+                {"input": 0.0, "output": 0.0},
+            )["output"]
+        )
 
 
 if __name__ == "__main__":
