@@ -1,3 +1,3 @@
-from .base_tool import BaseTool, tool
+from .base_tool_v2 import BaseTool, tool
 
 __all__ = ["BaseTool", "tool"]
