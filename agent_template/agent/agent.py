@@ -1,14 +1,15 @@
 import asyncio
 import json
 import os
+import random
+from copy import deepcopy
 from logging import Logger
 from pathlib import Path
 
 from agent_template._interface import LLMInterface
 from agent_template._other.config.settings import settings
 from agent_template._other.util import get_logger
-from agent_template._type import LLMResponse
-from agent_template.history import History
+from agent_template._type import History, LLMResponse, SessionHistory
 from agent_template.tool import BaseTool
 
 
@@ -17,21 +18,24 @@ class Agent:
     エージェントを表すクラス
     """
 
+    name: str
     who_am_i: str
     llm: LLMInterface
     tools: list[BaseTool]
     log_dir: Path
 
-    def __init__(self, who_am_i: str, tools: list[BaseTool], llm: LLMInterface, log_dir: os.PathLike) -> None:
+    def __init__(self, name: str, who_am_i: str, tools: list[BaseTool], llm: LLMInterface, log_dir: os.PathLike) -> None:
         """
         エージェントオブジェクトを作成する。
 
         Args:
+            name (str): エージェントの名前(エージェントの役割が分かるものだと良い ex. Teacher, Programmer etc.)
             who_am_i (str): このエージェントが何をするエージェントなのかを表す
             tools (list[BaseTool]): エージェントが使用するツールのリスト
             llm (LLMInterface): エージェントが使用するLLMインターフェース
             log_dir (os.PathLike): エージェントのログを保存するディレクトリパス
         """
+        self.name = name
         self.who_am_i = who_am_i
         self.llm = llm
         self.tools = tools
@@ -98,6 +102,15 @@ class Agent:
                     break  # ツールが呼び出されてしまった場合は再度計画ステップを実行
         history.add_system_message(content="Please perform the tasks according to the plan above.")
         return self._execute_llm_loop(history, use_log=use_log, logger=logger if use_log else None)
+
+    def _respond_to_history(self, history: SessionHistory, *, use_log: bool = False, logger: Logger | None = None) -> SessionHistory:
+        # マルチエージェント向けに履歴に対して応答を返す関数
+        ans = self._execute_llm_loop(deepcopy(history), use_log=use_log, logger=logger)
+        history.add_assistant_message(content=ans)
+        return history
+
+    def _get_motivation_score(self, history: SessionHistory) -> float:  # noqa: ARG002
+        return round(random.uniform(1, 5), 1)  # 一旦ランダム
 
     def _execute_llm_loop(self, history: History, *, use_log: bool = False, logger: Logger | None = None) -> str:
         while True:

@@ -20,8 +20,7 @@ from tenacity import (
 from agent_template._interface import LLMInterface
 from agent_template._other.config.settings import settings
 from agent_template._other.exception import RetryableError
-from agent_template._type import LLMResponse
-from agent_template.history import History
+from agent_template._type import History, LLMResponse
 from agent_template.tool import BaseTool, tool
 
 if TYPE_CHECKING:
@@ -47,7 +46,7 @@ class OpenAILLM(LLMInterface):
     def convert_type_info_to_schema(self, type_info: dict[str, Any]) -> dict[str, Any]:
         """
         BaseTool.get_tool_information()から得られる詳細な型情報を
-        OpenAI Function Calling用のJSON Schemaに変換します。
+        OpenAI Function Calling用のJSON Schemaに変換する。
 
         Args:
             type_info (dict): BaseTool._analyze_type_annotation()の出力
@@ -89,7 +88,7 @@ class OpenAILLM(LLMInterface):
     ) -> LLMResponse:
         params: dict[str, Any] = {
             "model": self.model,
-            "input": history.content,
+            "input": history.get_content(),
             "temperature": self.temperature,
             "top_p": top_p,
         }
@@ -129,10 +128,7 @@ class OpenAILLM(LLMInterface):
                 arg_properties = {}
                 required_args = []
                 for arg in tool_info["args"]:
-                    # 新しい詳細な型情報を使用
                     type_info = arg["type_info"]
-
-                    # JSON Schema形式のプロパティを構築
                     property_schema = self.convert_type_info_to_schema(type_info)
                     property_schema["description"] = arg["description"]
 
@@ -155,7 +151,7 @@ class OpenAILLM(LLMInterface):
                 )
         params: dict[str, Any] = {
             "model": self.model,
-            "input": history.content,
+            "input": history.get_content(),
             "temperature": self.temperature,
             "top_p": top_p,
             "tools": tool_for_param,
@@ -171,7 +167,7 @@ class OpenAILLM(LLMInterface):
 
         for item in response.output:
             if item.type == "function_call":  # ツール呼び出しの場合
-                ret_history.content.append(item)  # OpenAIの使用に合わせて帰ってきたオブジェクトをそのまま登録
+                ret_history.add_object(item)  # OpenAIの使用に合わせて帰ってきたオブジェクトをそのまま登録
                 ret_response.append(
                     LLMResponse(
                         content=response.output_text,

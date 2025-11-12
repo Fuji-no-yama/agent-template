@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
-from agent_template._type.llm_responce import LLMResponse
-from agent_template.history.history import History
+from agent_template._type import History, LLMResponse
 from agent_template.tool.base_tool import BaseTool
 
 
