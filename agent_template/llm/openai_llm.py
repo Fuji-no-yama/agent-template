@@ -22,7 +22,7 @@ from agent_template._other.config.settings import settings
 from agent_template._other.exception.exception import RetryableError
 from agent_template._type.llm_responce import LLMResponse
 from agent_template.history.history import History
-from agent_template.tool.base_tool import BaseTool, tool
+from agent_template.tool import BaseTool, tool
 
 if TYPE_CHECKING:
     from openai.types.responses import Response
@@ -36,8 +36,44 @@ def _llm_client() -> AsyncOpenAI:  # キャッシュを使用するためモジ�
 
 class OpenAILLM(LLMInterface):
     def __init__(self, model: str | None = "gpt-4.1", temperature: float | None = 0.0) -> None:
+        if model not in settings.openai_model_price:
+            err_msg = f"Unsupported model: {model}. Supported models are: {list(settings.openai_model_price.keys())}"
+            raise ValueError(err_msg)
         self.model = model
         self.temperature = temperature
+        self.output_token = 0
+        self.input_token = 0
+
+    def convert_type_info_to_schema(self, type_info: dict[str, Any]) -> dict[str, Any]:
+        """
+        BaseTool.get_tool_information()から得られる詳細な型情報を
+        OpenAI Function Calling用のJSON Schemaに変換します。
+
+        Args:
+            type_info (dict): BaseTool._analyze_type_annotation()の出力
+
+        Returns:
+            dict: OpenAI API用のJSON Schema
+        """
+        schema = {"type": type_info["type"]}
+
+        # Literal型（enum）の処理
+        if "enum" in type_info:
+            schema["enum"] = type_info["enum"]
+
+        # Optional型（nullable）の処理
+        if type_info.get("nullable", False):
+            schema["nullable"] = True
+
+        # array型の場合、items情報を追加
+        if type_info["type"] == "array" and "items" in type_info:
+            schema["items"] = self.convert_type_info_to_schema(type_info["items"])
+
+        # object型の場合、additionalProperties情報を追加
+        if type_info["type"] == "object" and "additionalProperties" in type_info:
+            schema["additionalProperties"] = self.convert_type_info_to_schema(type_info["additionalProperties"])
+
+        return schema
 
     @retry(
         retry=retry_if_exception_type(RetryableError),
@@ -61,6 +97,8 @@ class OpenAILLM(LLMInterface):
             response: Response = await _llm_client().responses.create(**params)
         except (RateLimitError, APIConnectionError) as e:
             raise RetryableError(str(e)) from e
+        self.input_token += response.usage.input_tokens
+        self.output_token += response.usage.output_tokens
         ret_history = history
         ret_history.add_assistant_message(content=response.output_text)
         return LLMResponse(
@@ -91,10 +129,15 @@ class OpenAILLM(LLMInterface):
                 arg_properties = {}
                 required_args = []
                 for arg in tool_info["args"]:
-                    arg_properties[arg["name"]] = {
-                        "type": arg["type"],
-                        "description": arg["description"],
-                    }
+                    # 新しい詳細な型情報を使用
+                    type_info = arg["type_info"]
+
+                    # JSON Schema形式のプロパティを構築
+                    property_schema = self.convert_type_info_to_schema(type_info)
+                    property_schema["description"] = arg["description"]
+
+                    arg_properties[arg["name"]] = property_schema
+
                     if arg.get("required", False):
                         required_args.append(arg["name"])
                 tool_for_param.append(
@@ -121,6 +164,8 @@ class OpenAILLM(LLMInterface):
             response: Response = await _llm_client().responses.create(**params)
         except (RateLimitError, APIConnectionError) as e:
             raise RetryableError(str(e)) from e
+        self.input_token += response.usage.input_tokens
+        self.output_token += response.usage.output_tokens
         ret_history = history
         ret_response: list[LLMResponse] = []
 
@@ -164,6 +209,20 @@ class OpenAILLM(LLMInterface):
             },
         )
         return history
+
+    def get_total_fee(self) -> float:
+        return (
+            self.input_token
+            * settings.openai_model_price.get(
+                self.model,
+                {"input": 0.0, "output": 0.0},
+            )["input"]
+            + self.output_token
+            * settings.openai_model_price.get(
+                self.model,
+                {"input": 0.0, "output": 0.0},
+            )["output"]
+        )
 
 
 if __name__ == "__main__":

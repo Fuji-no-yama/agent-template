@@ -52,6 +52,8 @@ class Agent:
         history = History(content=[])
         if use_log:
             logger = get_logger(self.log_dir, file_prefix="execute_task")
+            logger.info(f"[システムプロンプト]: {self.who_am_i}")
+            logger.info(f"[ユーザタスク]: {task}")
         history.add_system_message(content=self.who_am_i)
         history.add_user_message(content=task)
         return self._execute_llm_loop(history, use_log=use_log, logger=logger if use_log else None)
@@ -71,6 +73,8 @@ class Agent:
         go_to_next_step = False
         if use_log:
             logger = get_logger(self.log_dir, file_prefix="execute_complex_task")
+            logger.info(f"[システムプロンプト]: {self.who_am_i}")
+            logger.info(f"[ユーザタスク]: {task}")
         with (settings.data_dir / "prompt" / "complex_task_planning.prompt").open("r", encoding="utf-8") as f:
             planning_prompt = f.read()
         while not go_to_next_step:
@@ -108,11 +112,12 @@ class Agent:
                 if not resp.is_tool_call:
                     logger.info(f"[実行ステップ最終応答]: {resp.content}") if use_log else None
                     return resp.content  # 最終応答を返す
+                logger.info(f"[ツール指定]:\nname->{resp.tool_name}\nargs->{resp.tool_args}") if use_log else None
                 try:
                     tool_res = self._execute_tool(resp)  # ツールを実行
                 except Exception as e:  # noqa: BLE001
                     tool_res = f"Exception occurred during tool ({resp.tool_name}) execution: {e}"
-                logger.info(f"[ツール実行]:\nname->{resp.tool_name}\nargs->{resp.tool_args}\nresult->{tool_res}") if use_log else None
+                logger.info(f"[ツール結果]:\nresult->{tool_res}") if use_log else None
                 history = self.llm.set_tool_result(
                     history=history,
                     tool_name=resp.tool_name,
@@ -130,3 +135,11 @@ class Agent:
                     return tool_res
                 else:
                     return json.dumps(tool_res, ensure_ascii=False)
+
+    def get_total_fee(self) -> float:
+        """これまでのやり取りで発生した総費用を取得する。
+
+        Returns:
+            float: 総費用（ドル単位）
+        """
+        return self.llm.get_total_fee()

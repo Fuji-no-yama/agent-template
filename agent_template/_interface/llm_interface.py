@@ -81,3 +81,11 @@ class LLMInterface(ABC):
         Returns:
             History: ツールの実行結果が追加されたチャット履歴オブジェクト
         """
+
+    @abstractmethod
+    def get_total_fee(self) -> float:
+        """これまでのやり取りで発生した総費用をドルで取得します。
+
+        Returns:
+            float: 総費用（ドル単位）
+        """
