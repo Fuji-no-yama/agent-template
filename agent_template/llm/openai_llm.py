@@ -17,11 +17,11 @@ from tenacity import (
     wait_fixed,
 )
 
-from agent_template._interface.llm_interface import LLMInterface
+from agent_template._interface import LLMInterface
 from agent_template._other.config.settings import settings
-from agent_template._other.exception.exception import RetryableError
-from agent_template._type.llm_responce import LLMResponse
-from agent_template.history.history import History
+from agent_template._other.exception import RetryableError
+from agent_template._type import LLMResponse
+from agent_template.history import History
 from agent_template.tool import BaseTool, tool
 
 if TYPE_CHECKING:
