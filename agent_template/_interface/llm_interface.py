@@ -22,23 +22,19 @@ class LLMInterface(ABC):
         self,
         history: History,
         *,
-        top_p: float = 1.0,
         max_tokens: int = 1024,
     ) -> LLMResponse:
         """LLMのAPIを使用してチャット履歴に基づく応答を生成します。
 
         Args:
             history (list[dict[str, str]]): チャット履歴のリスト。各辞書は"role"と"content"キーを含む。
-            model (str | None, optional): 使用するモデル名.
-            temperature (float, optional): 応答のランダム性を制御する値（0.0-2.0）. Defaults to 1.0.
             top_p (float, optional): nucleus samplingのパラメータ（0.0-1.0）. Defaults to 1.0.
-            max_tokens (int, optional): 生成する最大トークン数. Defaults to 1024.
 
         Returns:
             LLMResponse: LLMからの応答を含むLLMResponseオブジェクト
 
         Raises:
-            RetryableError: APIの一時的なエラー（レート制限、接続エラー）が発生した場合
+            RetryableError: APIの一時的なエラー（レート制限、接続エラー）が発生し、リトライで対処できなかった場合
         """
 
     @abstractmethod
@@ -54,17 +50,14 @@ class LLMInterface(ABC):
 
         Args:
             history (list[dict[str, str]]): チャット履歴のリスト。各辞書は"role"と"content"キーを含む。
-            model (str | None, optional): 使用するモデル名.
-            temperature (float, optional): 応答のランダム性を制御する値（0.0-2.0）. Defaults to 1.0.
             top_p (float, optional): nucleus samplingのパラメータ（0.0-1.0）. Defaults to 1.0.
-            max_tokens (int, optional): 生成する最大トークン数. Defaults to 1024.
             tools (list[BaseTool]): 利用可能なツールリスト
 
         Returns:
             list[LLMResponse]: LLMからの応答を含むLLMResponseオブジェクトのリスト(複数ツールのためにlist)
 
         Raises:
-            RetryableError: APIの一時的なエラー（レート制限、接続エラー）が発生した場合
+            RetryableError: APIの一時的なエラー（レート制限、接続エラー）が発生し、リトライで対処できなかった場合
         """
 
     @abstractmethod

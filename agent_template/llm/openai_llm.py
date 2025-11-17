@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from openai import (
     APIConnectionError,
+    APITimeoutError,
     AsyncOpenAI,
+    InternalServerError,
     RateLimitError,
 )
 from tenacity import (
@@ -21,10 +23,11 @@ from agent_template._interface import LLMInterface
 from agent_template._other.config.settings import settings
 from agent_template._other.exception import RetryableError
 from agent_template._type import History, LLMResponse
-from agent_template.tool import BaseTool, tool
 
 if TYPE_CHECKING:
     from openai.types.responses import Response
+
+    from agent_template.tool import BaseTool
 
 
 @lru_cache
@@ -80,6 +83,15 @@ class OpenAILLM(LLMInterface):
         wait=wait_fixed(1.0),
         reraise=True,
     )
+    async def _get_llm_response(self, params: dict[str, Any]) -> Response:
+        try:
+            response: Response = await _llm_client().responses.create(**params)
+        except (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError) as e:
+            raise RetryableError(str(e)) from e
+        self.input_token += response.usage.input_tokens
+        self.output_token += response.usage.output_tokens
+        return response
+
     async def chat_with_history(
         self,
         history: History,
@@ -92,28 +104,18 @@ class OpenAILLM(LLMInterface):
             "temperature": self.temperature,
             "top_p": top_p,
         }
-        try:
-            response: Response = await _llm_client().responses.create(**params)
-        except (RateLimitError, APIConnectionError) as e:
-            raise RetryableError(str(e)) from e
-        self.input_token += response.usage.input_tokens
-        self.output_token += response.usage.output_tokens
+        response: Response = await self._get_llm_response(params)
         ret_history = history
         ret_history.add_assistant_message(content=response.output_text)
         return LLMResponse(
             content=response.output_text,
             is_tool_call=False,
             tool_name=None,
+            tool_id=None,
             tool_args=None,
             return_history=ret_history,
         )
 
-    @retry(
-        retry=retry_if_exception_type(RetryableError),
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(1.0),
-        reraise=True,
-    )
     async def chat_with_history_tools(  # noqa: PLR0913
         self,
         history: History,
@@ -156,12 +158,7 @@ class OpenAILLM(LLMInterface):
             "top_p": top_p,
             "tools": tool_for_param,
         }
-        try:
-            response: Response = await _llm_client().responses.create(**params)
-        except (RateLimitError, APIConnectionError) as e:
-            raise RetryableError(str(e)) from e
-        self.input_token += response.usage.input_tokens
-        self.output_token += response.usage.output_tokens
+        response: Response = await self._get_llm_response(params)
         ret_history = history
         ret_response: list[LLMResponse] = []
 
@@ -192,6 +189,23 @@ class OpenAILLM(LLMInterface):
                 )
         return ret_response
 
+    def simple_use(self, system_prompt: str, user_prompt: str) -> str:
+        """
+        簡易的にLLMを使用できる同期関数
+
+        Args:
+            system_prompt (str): システムプロンプト
+            user_prompt (str): ユーザープロンプト
+
+        Returns:
+            str: LLMからの応答内容
+        """
+        history = History(content=[])
+        history.add_system_message(content=system_prompt)
+        history.add_user_message(content=user_prompt)
+        response = asyncio.run(self.chat_with_history(history=history))
+        return response.content
+
     def set_tool_result(self, history: History, tool_name: str, tool_id: str, result: str) -> History:
         history.content.append(
             {
@@ -207,6 +221,12 @@ class OpenAILLM(LLMInterface):
         return history
 
     def get_total_fee(self) -> float:
+        """
+        総費用を取得します。
+
+        Returns:
+            float: 総費用（ドル単位）
+        """
         return (
             self.input_token
             * settings.openai_model_price.get(
@@ -219,64 +239,3 @@ class OpenAILLM(LLMInterface):
                 {"input": 0.0, "output": 0.0},
             )["output"]
         )
-
-
-if __name__ == "__main__":
-    llm = OpenAILLM()
-
-    class MyTool(BaseTool):
-        @tool(use_docstring=True)
-        def add(self, x: int, y: int) -> int:
-            """
-            2つの整数を加算します。
-
-            Args:
-                x (int): 加算する最初の整数
-                y (int): 加算する2番目の整数
-
-            Returns:
-                int: 加算結果
-            """
-            return x + y
-
-        @tool(use_docstring=True)
-        def multiply(self, a: float, b: float) -> float:
-            """
-            2つの浮動小数点数を乗算します。
-
-            Args:
-                a (float): 乗算する最初の浮動小数点数
-                b (float): 乗算する2番目の浮動小数点数
-
-            Returns:
-                float: 乗算結果
-            """
-            return a * b
-
-    prompt = "What is the capital of France?"
-    response = asyncio.run(llm.chat_with_history(History(content=[{"role": "user", "content": prompt}])))
-    print(response.content)
-
-    prompt = "17345.987 * 34827.9 = ?"
-    response = asyncio.run(
-        llm.chat_with_history_tools(
-            history=History().add_user_message(content=prompt),
-            tools=[MyTool()],
-        ),
-    )
-    for resp in response:
-        print(resp.content)
-        print(resp.tool_name)
-        print(resp.tool_args)
-
-    prompt = "フランスの首都は?"
-    response = asyncio.run(
-        llm.chat_with_history_tools(
-            history=History().add_user_message(content=prompt),
-            tools=[MyTool()],
-        ),
-    )
-    for resp in response:
-        print(resp.content)
-        print(resp.tool_name)
-        print(resp.tool_args)
