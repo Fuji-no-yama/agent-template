@@ -1,7 +1,7 @@
 # added content
-# .devcontainer/*
+.devcontainer/*
 .venv/*
-# .vscode/*
+.vscode/*
 tmp/*
 .DS_Store
 .env.local
