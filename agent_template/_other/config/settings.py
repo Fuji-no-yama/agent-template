@@ -1,6 +1,7 @@
 from importlib.resources import files
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import (
     BaseSettings,
@@ -98,4 +99,5 @@ class Settings(BaseSettings):
         return dotenv_settings, init_settings, env_settings, file_secret_settings
 
 
+load_dotenv()
 settings = Settings()

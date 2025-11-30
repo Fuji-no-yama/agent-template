@@ -9,11 +9,13 @@ include-package-data = true
 agent_template = ["data/**/*"]
 
 [tool.setuptools.packages.find]
-include = ["agent_template"]
+where = ["."]
+include = ["agent_template*"]
+exclude = ["test*", "tmp*"]
 
 [project]
 name = "agent-template"
-version = "1.0.0"
+version = "1.0.2"
 description = "OpenAI API ネイティブなagentを作るためのライブラリ"
 readme = "ReadMe.md"
 requires-python = ">=3.10"

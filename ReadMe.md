@@ -88,7 +88,7 @@ class MyTool(BaseTool):
 from agent_template import Agent, OpenAILLM
 
 # LLMインスタンスの作成
-llm = OpenAILLM(model="gpt-4", temperature=0.0)
+llm = OpenAILLM(model="gpt-4.1", temperature=0.0)
 
 # エージェントの作成
 agent = Agent(
