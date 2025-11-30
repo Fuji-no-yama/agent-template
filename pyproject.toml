@@ -9,7 +9,9 @@ include-package-data = true
 agent_template = ["data/**/*"]
 
 [tool.setuptools.packages.find]
-include = ["agent_template"]
+where = ["."]
+include = ["agent_template*"]
+exclude = ["test*", "tmp*"]
 
 [project]
 name = "agent-template"
