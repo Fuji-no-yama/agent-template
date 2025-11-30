@@ -45,8 +45,8 @@ if __name__ == "__main__":
     )
 
     task = "クラスに在籍している生徒の名前を教えてください。また、aliceの成績も教えてください。"
-
     final_response = agent.execute_task(task=task, use_log=False)
+
     print("Final Response:", final_response)
     total_fee = agent.get_total_fee()
     print(f"Total Fee: ${total_fee:.6f}")
