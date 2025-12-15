@@ -61,6 +61,19 @@ class LLMInterface(ABC):
         """
 
     @abstractmethod
+    def simple_use(self, system_prompt: str, user_prompt: str) -> str:
+        """
+        簡易的にLLMを使用できる同期関数
+
+        Args:
+            system_prompt (str): システムプロンプト
+            user_prompt (str): ユーザープロンプト
+
+        Returns:
+            str: LLMからの応答内容
+        """
+
+    @abstractmethod
     def set_tool_result(self, history: History, tool_name: str, tool_id: str, result: str) -> History:
         """履歴にツールの実行結果を追加します。
 

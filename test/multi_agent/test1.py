@@ -46,6 +46,7 @@ class PrincipalTool(BaseTool):
         Returns:
             bool: 卒業可能かどうか
         """
+        return bool(sex == "male" and average_score >= 75 or sex == "female" and average_score >= 80)  # noqa: PLR2004
 
 
 if __name__ == "__main__":
@@ -69,7 +70,7 @@ if __name__ == "__main__":
 
     session = Session(participants=[teacher_agent, principal_agent])
     session.start_session(
-        purpose="在籍生徒について情報をもとに卒業の決定を判断する。",
+        purpose="在籍生徒について情報をもとに卒業の決定を判断し、報告する。",
         start_agent_name="Principal",
         use_log=True,
     )

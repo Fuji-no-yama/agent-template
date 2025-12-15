@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import random
 from copy import deepcopy
 from logging import Logger
 from pathlib import Path
@@ -109,8 +108,64 @@ class Agent:
         history.add_assistant_message(content=ans)
         return history
 
-    def _get_motivation_score(self, history: SessionHistory) -> float:  # noqa: ARG002
-        return round(random.uniform(1, 5), 1)  # 一旦ランダム
+    def _get_motivation_score(self, history: SessionHistory) -> float:  # 発言動機について履歴を元に採点する関数
+        with (settings.data_dir / "prompt" / "get_motivation.prompt").open("r", encoding="utf-8") as f:
+            motivation_score_prompt = f.read()
+        copied_history = deepcopy(history)
+        copied_history.set_whose(self.name)
+        current_history_str = ""
+        for content in copied_history.get_content():
+            current_history_str += str(content) + "\n"
+        tmp_history = History(content=[])  # 今回のスコア判定のみに使用する履歴オブジェクト
+        tmp_history.add_system_message(content=self.who_am_i)
+        tmp_history.add_user_message(content=motivation_score_prompt.format(current_history_str=current_history_str))
+        while True:
+            try:
+                responses: list[LLMResponse] = asyncio.run(
+                    self.llm.chat_with_history_tools(
+                        history=tmp_history,
+                        tools=self.tools,
+                    ),
+                )
+                for resp in responses:
+                    if not resp.is_tool_call:
+                        res = float(resp.content)
+                        return res
+                    else:
+                        continue
+            except Exception:  # noqa: BLE001
+                continue
+
+    def _judge_finished(self, history: SessionHistory) -> bool:  # 履歴を元にタスクが終了したかどうかを判定する関数
+        with (settings.data_dir / "prompt" / "judge_finished.prompt").open("r", encoding="utf-8") as f:
+            judge_finished_prompt = f.read()
+        copied_history = deepcopy(history)
+        copied_history.set_whose(self.name)
+        current_history_str = ""
+        for content in copied_history.get_content():
+            current_history_str += str(content) + "\n"
+        tmp_history = History(content=[])  # 今回のスコア判定のみに使用する履歴オブジェクト
+        tmp_history.add_system_message(content=self.who_am_i)
+        tmp_history.add_user_message(content=judge_finished_prompt.format(purpose=history.purpose, current_history_str=current_history_str))
+        while True:
+            try:
+                responses: list[LLMResponse] = asyncio.run(
+                    self.llm.chat_with_history_tools(
+                        history=tmp_history,
+                        tools=self.tools,
+                    ),
+                )
+                for resp in responses:
+                    if not resp.is_tool_call:
+                        if resp.content == "True":
+                            res = True
+                        elif resp.content == "False":
+                            res = False
+                        else:
+                            continue
+            except Exception:  # noqa: BLE001
+                continue
+            return res
 
     def _execute_llm_loop(self, history: History, *, use_log: bool = False, logger: Logger | None = None) -> str:
         while True:

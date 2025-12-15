@@ -1,0 +1,17 @@
+You are participating in a conversation and the current conversation history is below.
+
+Please quantitatively score whether you should speak up in this situation.
+
+# Scoring criteria
+Please rate each of the following three points using an appropriate continuous value from 0 to 1, and use the total as your score. (In other words, the score will fall within the range of 0 to 3 points.)
+1. Can you utilize your expertise (tools)?
+2. Have you not spoken recently?
+3. Are you being turned away from other participants?
+
+# Current conversation history
+{current_history_str}
+
+
+# Notes
+- The output should only be the calculated score, and should be in a format that can be converted to a numerical value in Python using float(). (i.e. no extra ", Markdown, score reasons, etc.)
+- Do not use tools in this response. Please use the tool only as a reference for scoring purposes.

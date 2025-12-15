@@ -58,7 +58,8 @@ class SessionHistory(History):
                     if item.role == "system":  # 他のエージェントのシステムメッセージは無視
                         continue
                     role = "user"  # 所有者から見て他のエージェントはユーザに
-                    content = [{"type": "input_text", "text": f"({item.whose}): " + item.content}]  # 発言元を明記
+                    text = f"This is {item.whose}. " + item.content if f"This is {item.whose}." not in item.content else item.content
+                    content = [{"type": "input_text", "text": text}]  # 発言元を明記
                 ret_list.append({"role": role, "content": content})
             else:  # LLMプロバイダから返ってきたオブジェクトの場合はそのまま追加
                 ret_list.append(item)
@@ -79,6 +80,14 @@ class SessionHistory(History):
             ],
         }
 
-    def is_finished(self) -> bool:
-        self.clean_content()
-        return len(self.content) >= 8  # noqa: PLR2004 一旦4回目以降のやり取りがある場合は終了とみなす
+    def get_silence_count(self, name: str) -> float:
+        """
+        指定されたエージェントが最後に発言してから経過した回数を取得する
+        """
+        count = 0
+        for item in reversed(self.content):
+            if isinstance(item, Statement):
+                count += 1
+                if item.whose == name:
+                    return float(count)
+        return float("inf")  # 発言がない場合は無限大を返す
