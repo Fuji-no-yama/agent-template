@@ -1,10 +1,10 @@
 import asyncio
 import json
 import os
-import random
 from copy import deepcopy
 from logging import Logger
 from pathlib import Path
+from typing import Any
 
 from agent_template._interface import LLMInterface
 from agent_template._other.config.settings import settings
@@ -109,8 +109,64 @@ class Agent:
         history.add_assistant_message(content=ans)
         return history
 
-    def _get_motivation_score(self, history: SessionHistory) -> float:  # noqa: ARG002
-        return round(random.uniform(1, 5), 1)  # 一旦ランダム
+    def _get_motivation_score(self, history: SessionHistory) -> float:  # 発言動機について履歴を元に採点する関数
+        with (settings.data_dir / "prompt" / "get_motivation.prompt").open("r", encoding="utf-8") as f:
+            motivation_score_prompt: str = f.read()
+        copied_history: SessionHistory = deepcopy(history)
+        copied_history.set_whose(self.name)
+        current_history_str = ""
+        for content in copied_history.get_content():
+            current_history_str += str(content) + "\n"
+        tmp_history = History(content=[])  # 今回のスコア判定のみに使用する履歴オブジェクト
+        tmp_history.add_system_message(content=self.who_am_i)
+        tmp_history.add_user_message(content=motivation_score_prompt.format(current_history_str=current_history_str))
+        while True:
+            try:
+                responses: list[LLMResponse] = asyncio.run(
+                    self.llm.chat_with_history_tools(
+                        history=tmp_history,
+                        tools=self.tools,
+                    ),
+                )
+                for resp in responses:
+                    if not resp.is_tool_call:
+                        res = float(resp.content)
+                        return res
+                    else:
+                        continue
+            except Exception:  # noqa: BLE001
+                continue
+
+    def _judge_finished(self, history: SessionHistory) -> bool:  # 履歴を元にタスクが終了したかどうかを判定する関数
+        with (settings.data_dir / "prompt" / "judge_finished.prompt").open("r", encoding="utf-8") as f:
+            judge_finished_prompt = f.read()
+        copied_history: SessionHistory = deepcopy(history)
+        copied_history.set_whose(self.name)
+        current_history_str = ""
+        for content in copied_history.get_content():
+            current_history_str += str(content) + "\n"
+        tmp_history = History(content=[])  # 今回のスコア判定のみに使用する履歴オブジェクト
+        tmp_history.add_system_message(content=self.who_am_i)
+        tmp_history.add_user_message(content=judge_finished_prompt.format(purpose=history.purpose, current_history_str=current_history_str))
+        while True:
+            try:
+                responses: list[LLMResponse] = asyncio.run(
+                    self.llm.chat_with_history_tools(
+                        history=tmp_history,
+                        tools=self.tools,
+                    ),
+                )
+                for resp in responses:
+                    if not resp.is_tool_call:
+                        if resp.content == "True":
+                            res = True
+                        elif resp.content == "False":
+                            res = False
+                        else:
+                            continue
+            except Exception:  # noqa: BLE001
+                continue
+            return res
 
     def _execute_llm_loop(self, history: History, *, use_log: bool = False, logger: Logger | None = None) -> str:
         while True:
@@ -128,8 +184,9 @@ class Agent:
                     return resp.content  # 最終応答を返す
                 if logger:
                     logger.info(f"[ツール指定]:\nname->{resp.tool_name}\nargs->{resp.tool_args}") if use_log else None
-                if resp.tool_name is None or resp.tool_id is None or resp.tool_args is None:
-                    err_msg = "Tool name or tool ID or tool args is None despite is_tool_call being True."
+                if resp.tool_name is None or resp.tool_args is None or resp.tool_id is None:
+                    err_msg = "Tool call indicated but tool_name or tool_args or tool_id is None."
+                    err_msg += f"tool_name: {resp.tool_name}, tool_args: {resp.tool_args}, tool_id: {resp.tool_id}"
                     raise ValueError(err_msg)
                 try:
                     tool_res: str = self._execute_tool(resp)  # ツールを実行
@@ -145,11 +202,12 @@ class Agent:
                 )
 
     def _execute_tool(self, llm_response: LLMResponse) -> str:  # LLMの出力に応じてツールを実行する内部関数
-        if llm_response.tool_name is None or llm_response.tool_id is None or llm_response.tool_args is None:
-            err_msg = "Tool name or tool ID or tool args is None despite is_tool_call being True."
+        if llm_response.tool_name is None or llm_response.tool_args is None:
+            err_msg = "Tool call indicated but tool_name or tool_args is None."
+            err_msg += f"tool_name: {llm_response.tool_name}, tool_args: {llm_response.tool_args}"
             raise ValueError(err_msg)
-        tool_name = llm_response.tool_name  # これは関数名
-        tool_args = llm_response.tool_args
+        tool_name: str = llm_response.tool_name  # これは関数名
+        tool_args: dict[str, Any] = llm_response.tool_args
         for tool_instance in self.tools:
             if tool_instance.has_tool(tool_name):
                 tool_res = tool_instance.execute_tool(tool_name=tool_name, args=tool_args)
@@ -157,7 +215,7 @@ class Agent:
                     return tool_res
                 else:
                     return json.dumps(tool_res, ensure_ascii=False)
-        err_msg = f"Tool '{tool_name}' not found in agent's tool list."
+        err_msg = f"Tool with name {tool_name} not found in agent's tools."
         raise ValueError(err_msg)
 
     def get_total_fee(self) -> float:

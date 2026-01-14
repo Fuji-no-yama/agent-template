@@ -1,13 +1,9 @@
 import json
-import random
-from typing import TYPE_CHECKING
+from logging import Logger
 
 from agent_template import Agent
 from agent_template._other.util import get_logger
 from agent_template._type.session_history import SessionHistory
-
-if TYPE_CHECKING:
-    from logging import Logger
 
 
 class Session:
@@ -37,7 +33,7 @@ class Session:
             for agent in self.participants:
                 if agent.name == start_agent_name:
                     current_agent: Agent = agent
-            err_msg = f"The agent name '{start_agent_name}' is not on the participant list."
+            err_msg = f"Agent with name {start_agent_name} not found among participants."
             raise ValueError(err_msg)
 
         logger: Logger = get_logger(log_dir="/workspace/tmp/log", file_prefix="session")
@@ -58,22 +54,26 @@ class Session:
                 else:
                     cleaned_debug_history.append({"type": "object", "data": "おそらくツール呼び出し"})
             logger.info(json.dumps(cleaned_debug_history, ensure_ascii=False, indent=2))
-            if session_history.is_finished():  # 終了の場合
+            if all(agent._judge_finished(history=session_history) for agent in self.participants):  # エージェント全員が目的達成を認めた場合終了
                 break
-            current_agent: Agent = self._get_next_agent(history=session_history)  # 次の発言者を決定
+            current_agent: Agent = self._get_next_agent_from_score(history=session_history, logger=logger if use_log else None)  # 次の発言者を決定
 
-    def _get_next_agent(self, history: SessionHistory) -> Agent:  # 次の発言者を決定する(前の発言者以外からランダム)
-        candidates = [agent for agent in self.participants if agent.name != history.whose]
-        next_agent = random.choice(candidates)
-        return next_agent
-
-    def _get_next_agent_from_score(self, history: SessionHistory) -> Agent:  # 次の発言者を決定する
+    def _get_next_agent_from_score(self, history: SessionHistory, logger: Logger | None = None) -> Agent:  # 次の発言者を決定する
         max_score = -1
+        next_agent: Agent = self.participants[0]
         for agent in self.participants:
-            score = agent._get_motivation_score(history=history)
+            score: int | float = agent._get_motivation_score(history=history)
+            if logger:
+                logger.info(f"{agent.name}の動機化スコア: {score}")
             if score > max_score:
-                max_score = score
-                next_agent = agent
+                max_score: int | float = score
+                next_agent: Agent = agent
+            elif score == max_score:
+                if history.get_silence_count(name=agent.name) > history.get_silence_count(name=next_agent.name):  # 沈黙時間が長い方が優先
+                    next_agent: Agent = agent
+        if max_score == -1:
+            err_msg = "All agents returned -1 motivation score; cannot determine next agent."
+            raise ValueError(err_msg)
         return next_agent
 
     def get_total_fee(self) -> float:
