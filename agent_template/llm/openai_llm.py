@@ -22,7 +22,7 @@ from tenacity import (
 from agent_template._interface import LLMInterface
 from agent_template._other.config.settings import settings
 from agent_template._other.exception import RetryableError
-from agent_template._type import History, LLMResponse
+from agent_template.type import History, LLMResponse
 
 if TYPE_CHECKING:
     from openai.types.responses import Response
@@ -41,7 +41,7 @@ class OpenAILLM(LLMInterface):
         if model not in settings.openai_model_price:
             err_msg = f"Unsupported model: {model}. Supported models are: {list(settings.openai_model_price.keys())}"
             raise ValueError(err_msg)
-        if model in ["gpt-5-mini", "gpt-5-nano", "gpt-5-chat-latest", "gpt-5-codex", "gpt-5-pro"] and temperature is not None:
+        if model in ["gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-chat-latest", "gpt-5-codex", "gpt-5-pro"] and temperature is not None:
             err_msg = "gpt-5 like models do not support temperature setting."
             raise ValueError(err_msg)
         if temperature is None:
@@ -92,6 +92,8 @@ class OpenAILLM(LLMInterface):
         """
         LLMからの返答を取得する内部関数
         """
+        if self.model in ["gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-chat-latest", "gpt-5-codex", "gpt-5-pro"] and "temperature" in params:
+            params.pop("temperature")  # gpt-5系はtemperature指定を受け付けないように変更
         try:
             response: Response = await _llm_client().responses.create(**params)
         except (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError) as e:

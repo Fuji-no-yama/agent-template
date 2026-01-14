@@ -3,7 +3,7 @@ from logging import Logger
 
 from agent_template import Agent
 from agent_template._other.util import get_logger
-from agent_template._type.session_history import SessionHistory
+from agent_template.type.session_history import SessionHistory
 
 
 class Session:

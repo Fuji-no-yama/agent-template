@@ -2,7 +2,8 @@
 from agent_template import OpenAILLM
 
 if __name__ == "__main__":
-    llm = OpenAILLM(model="gpt-5", temperature=0.0)
+    llm = OpenAILLM(model="gpt-5", temperature=None)
+    # llm = OpenAILLM(model="gpt-5", temperature=0.0)  # noqa: ERA001
     system_prompt = "You are a helpful assistant."
     user_prompt = "What is the capital of France?"
     response = llm.simple_use(system_prompt=system_prompt, user_prompt=user_prompt)

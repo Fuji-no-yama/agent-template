@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
-from agent_template._type import History, LLMResponse
 from agent_template.tool import BaseTool
+from agent_template.type import History, LLMResponse
 
 
 class LLMInterface(ABC):

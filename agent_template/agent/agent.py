@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 from copy import deepcopy
 from logging import Logger
 from pathlib import Path
@@ -9,8 +8,8 @@ from typing import Any
 from agent_template._interface import LLMInterface
 from agent_template._other.config.settings import settings
 from agent_template._other.util import get_logger
-from agent_template._type import History, LLMResponse, SessionHistory
 from agent_template.tool import BaseTool
+from agent_template.type import History, LLMResponse, SessionHistory
 
 
 class Agent:
@@ -24,7 +23,7 @@ class Agent:
     tools: list[BaseTool]
     log_dir: Path
 
-    def __init__(self, name: str, who_am_i: str, tools: list[BaseTool], llm: LLMInterface, log_dir: os.PathLike) -> None:
+    def __init__(self, name: str, who_am_i: str, tools: list[BaseTool], llm: LLMInterface, log_dir: str | Path) -> None:
         """
         エージェントオブジェクトを作成する。
 
