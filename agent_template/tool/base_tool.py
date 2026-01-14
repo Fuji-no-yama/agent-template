@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import inspect
-import re
 from collections.abc import Callable
-from typing import Any, TypeVar, final, get_type_hints
+from typing import Any, Literal, TypeVar, final, get_args, get_origin, get_type_hints
 
 from docstring_parser import parse
 
@@ -26,7 +25,7 @@ def tool(*, use_docstring: bool = True) -> Callable[[F], F]:
 
 class BaseTool:
     """
-    ツールを自作するためのベースクラス
+    ツールを自作するためのベースクラス（v2拡張版）
     """
 
     @staticmethod
@@ -39,8 +38,8 @@ class BaseTool:
         return obj if callable(obj) else None
 
     @staticmethod
-    def _get_json_schema_type_mapping() -> dict[type, str]:
-        """Python型からJSON Schema型への変換マッピングを返します。"""
+    def _get_basic_type_mapping() -> dict[type, str]:
+        """基本型からJSON Schema型への変換マッピングを返します。"""
         return {
             str: "string",
             int: "integer",
@@ -51,49 +50,120 @@ class BaseTool:
         }
 
     @staticmethod
-    def _infer_type_from_name(type_name: str) -> str:
-        """型名からJSON Schema型を推測します。"""
-        type_name_lower = type_name.lower()
-        type_patterns = {
-            ("str", "string"): "string",
-            ("int", "integer"): "integer",
-            ("float", "number"): "number",
-            ("bool", "boolean"): "boolean",
-            ("list", "array"): "array",
-            ("dict", "object"): "object",
-        }
+    def _analyze_type_annotation(annotation: object) -> dict[str, Any]:
+        """型注釈を詳細に解析してJSON Schema形式の情報を返します."""
+        if annotation is inspect.Signature.empty or annotation is None:
+            return {"type": "string", "additional_info": "no_annotation"}
 
-        for patterns, json_type in type_patterns.items():
-            if any(pattern in type_name_lower for pattern in patterns):
-                return json_type
-        return "string"
+        basic_mapping: dict[type, str] = BaseTool._get_basic_type_mapping()
+
+        # 基本型の直接マッチング
+        if isinstance(annotation, type) and annotation in basic_mapping:
+            return {"type": basic_mapping[annotation], "additional_info": f"basic_type_{annotation.__name__}"}
+
+        # typing モジュールの型解析
+        return BaseTool._analyze_complex_type(annotation)
 
     @staticmethod
-    def _format_annotation(ann: object) -> str:
-        """型注釈をJSON Schema形式の型文字列に変換して返します。"""
-        if ann is inspect.Signature.empty:
-            return "string"
+    def _analyze_complex_type(annotation: object) -> dict[str, Any]:
+        """複雑な型注釈を解析します."""
+        origin = get_origin(annotation)
+        args = get_args(annotation)
 
-        type_mapping = BaseTool._get_json_schema_type_mapping()
+        if origin is Literal:
+            return BaseTool._handle_literal_type(args)
 
-        # 直接的な型マッチング
-        if ann in type_mapping:
-            return type_mapping[ann]
+        if BaseTool._is_union_type(origin):
+            return BaseTool._handle_union_type(args, annotation)
 
-        # typing モジュールの型の処理
-        origin = getattr(ann, "__origin__", None)
+        if origin is list:
+            return BaseTool._handle_list_type(args, annotation)
+
+        if origin is dict:
+            return BaseTool._handle_dict_type(args, annotation)
+
+        return BaseTool._handle_unsupported_type(annotation, origin)
+
+    @staticmethod
+    def _handle_literal_type(args: tuple[Any, ...]) -> dict[str, Any]:
+        """Literal型を処理します."""
+        return {
+            "type": "string",
+            "enum": list(args),
+            "additional_info": f"literal_{args}",
+        }
+
+    @staticmethod
+    def _is_union_type(origin: object) -> bool:
+        """Union型かどうかを判定します."""
+        return origin is type(None) or str(origin) == "typing.Union"
+
+    @staticmethod
+    def _handle_union_type(args: tuple[Any, ...], annotation: object) -> dict[str, Any]:
+        """Union型を処理します."""
+        optional_args_count = 2
+        if len(args) == optional_args_count and type(None) in args:
+            non_none_type = args[0] if args[1] is type(None) else args[1]
+            result = BaseTool._analyze_type_annotation(non_none_type)
+            result["nullable"] = True
+            result["additional_info"] = f"optional_{result.get('additional_info', '')}"
+            return result
+
+        msg = f"複雑なUnion型は未サポートです: {annotation}"
+        raise ValueError(msg)
+
+    @staticmethod
+    def _handle_list_type(args: tuple[Any, ...], annotation: object) -> dict[str, Any]:
+        """list型を処理します."""
+        if not args:
+            return {"type": "array", "additional_info": "list_no_args"}
+
+        if len(args) == 1:
+            item_type = BaseTool._analyze_type_annotation(args[0])
+            return {
+                "type": "array",
+                "items": item_type,
+                "additional_info": f"list_{args[0]}",
+            }
+
+        msg = f"複雑なlist型は未サポートです: {annotation}"
+        raise ValueError(msg)
+
+    @staticmethod
+    def _handle_dict_type(args: tuple[Any, ...], annotation: object) -> dict[str, Any]:
+        """dict型を処理します."""
+        if not args:
+            return {"type": "object", "additional_info": "dict_no_args"}
+
+        dict_args_count = 2
+        if len(args) == dict_args_count:
+            key_type, value_type = args
+            if key_type is not str:
+                msg = f"dict のキー型は str のみサポートです: {key_type}"
+                raise ValueError(msg)
+
+            value_type_info = BaseTool._analyze_type_annotation(value_type)
+            return {
+                "type": "object",
+                "additionalProperties": value_type_info,
+                "additional_info": f"dict_{key_type}_{value_type}",
+            }
+
+        msg = f"複雑なdict型は未サポートです: {annotation}"
+        raise ValueError(msg)
+
+    @staticmethod
+    def _handle_unsupported_type(annotation: object, origin: object) -> dict[str, Any]:
+        """未サポート型を処理します."""
         if origin is not None:
-            if origin in type_mapping:
-                return type_mapping[origin]
-            if origin is type(None):
-                return "null"
+            msg = f"未サポートの型です: {annotation} (origin: {origin})"
+            raise ValueError(msg)
 
-        # 型名から推測
-        type_name = getattr(ann, "__name__", str(ann))
-        if isinstance(type_name, str):
-            return BaseTool._infer_type_from_name(type_name)
+        if hasattr(annotation, "__name__"):
+            msg = f"カスタムクラス型は未サポートです: {annotation.__name__}"
+            raise ValueError(msg)
 
-        return "string"
+        return {"type": "string", "additional_info": f"fallback_{str(annotation)}"}
 
     @staticmethod
     def _get_type_hints_safe(fn: Callable[..., Any]) -> dict[str, object]:
@@ -104,26 +174,53 @@ class BaseTool:
             return {}
 
     @staticmethod
-    def _parse_google_docstring_args(doc: str) -> dict[str, str]:
-        """Google スタイルの docstring から引数説明を抽出して辞書を返します。
-
-        例 (doc の一部):
-            Args:
-                x: 説明...
-                y: 別の説明
-
-        戻り値: {"x": "説明...", "y": "別の説明"}
+    def _parse_google_docstring(doc: str) -> dict[str, Any]:
         """
-        ret_dict = {}
+        Google スタイルの docstring から情報を抽出します。
+
+        Returns:
+            dict: 以下のキーを含む辞書
+                - description (str): 関数の説明
+                - args (dict): 引数情報 {arg_name: {"description": str, "type_name": str}}
+                - returns (dict): 戻り値情報 {"description": str, "type_name": str}
+        """
+        result = {
+            "description": "",
+            "args": {},
+            "returns": {"description": "", "type_name": ""},
+        }
+
+        if not doc:
+            return result
+
         parsed = parse(doc)
-        for p in parsed.params:
-            ret_dict[p.arg_name] = f"{p.description}:(python type: {p.type_name})"
-        return ret_dict
+
+        # 関数の説明（短い説明）
+        if parsed.short_description:
+            result["description"] = parsed.short_description
+        elif parsed.long_description:
+            result["description"] = parsed.long_description
+
+        # 引数情報
+        for param in parsed.params:
+            result["args"][param.arg_name] = {  # ty:ignore[invalid-assignment]
+                "description": param.description or "",
+                "type_name": param.type_name or "",
+            }
+
+        # 戻り値情報
+        if parsed.returns:
+            result["returns"] = {
+                "description": parsed.returns.description or "",
+                "type_name": parsed.returns.type_name or "",
+            }
+
+        return result
 
     @final
     def get_tool_information(self) -> list[dict]:
         """
-        ツール登録されている関数(@toolがついている関数)について情報を返す関数
+        ツール登録されている関数(@toolがついている関数)について詳細情報を返す関数
 
         Returns:
             list[dict]: ツール情報のリスト。各辞書は以下のキーを含む:
@@ -131,10 +228,15 @@ class BaseTool:
                 - description (str): ツール関数の説明
                 - args (list[dict]): 引数情報のリスト。各辞書は以下のキーを含む:
                     - name (str): 引数名
-                    - type (str): 引数の型
+                    - type_info (dict): 詳細な型情報 <- ここに諸々の情報が入る
                     - required (bool): 引数が必須かどうか
                     - description (str): 引数の説明
                     - default (Any, optional): 引数のデフォルト値（省略可能）
+                    - docstring_type (str): docstring内の型名
+                - returns (dict): 戻り値情報
+                    - type_info (dict): 戻り値の型情報
+                    - description (str): 戻り値の説明
+                    - docstring_type (str): docstring内の戻り値型名
         """
         tools: list[dict] = []
 
@@ -146,60 +248,94 @@ class BaseTool:
                 mark = getattr(fn, "__introspect_mark__", None)
                 if not mark:
                     continue
-                spec = self._spec_from_fn(fn)
 
-                params = spec["parameters"]
-                doc = spec["docstring"]
-                short = spec.get("short_description", "")
-                args_map = self._parse_google_docstring_args(doc) if doc else {}
-                for param in params:
-                    name = param["name"]
-                    param["description"] = args_map.get(name, "")
+                try:
+                    spec = self._spec_from_fn(fn)
+                    tools.append(spec)
+                except ValueError as e:
+                    # 未サポート型がある場合はエラーを発生
+                    func_name = getattr(fn, "__name__", attr_name)
+                    msg = f"関数 '{func_name}' で未サポート型が検出されました: {e}"
+                    raise ValueError(msg) from e
 
-                tool_info = {
-                    "name": getattr(fn, "__name__", attr_name),
-                    "description": short if mark.get("use_docstring", True) else "",
-                    "args": params,
-                }
-                tools.append(tool_info)
         if not tools:
             err_msg = f"{type(self).__name__} にツール関数が見つかりません。"
             raise ValueError(err_msg)
         return tools
 
     @final
-    def _spec_from_fn(self, fn: Callable[..., Any]) -> dict[str, object]:
-        """指定した関数からパラメータ情報と docstring を抽出して返すヘルパー。"""
+    def _spec_from_fn(self, fn: Callable[..., Any]) -> dict[str, Any]:
+        """指定した関数からパラメータ情報と docstring を詳細に抽出して返すヘルパー。"""
         try:
             sig = inspect.signature(fn)
         except (ValueError, TypeError):
-            return {"parameters": [], "docstring": ""}
+            return {
+                "name": getattr(fn, "__name__", "unknown"),
+                "description": "",
+                "args": [],
+                "returns": {"type_info": {"type": "unknown"}, "description": "", "docstring_type": ""},
+            }
 
+        # Type hints取得
         hints = self._get_type_hints_safe(fn)
-        params: list[dict] = []
+
+        # Docstring解析
+        doc = inspect.getdoc(fn) or ""
+        docstring_info = self._parse_google_docstring(doc)
+
+        # 引数情報の構築
+        args_info: list[dict] = []
         empty = inspect.Signature.empty
-        for name, p in sig.parameters.items():
+
+        for name, param in sig.parameters.items():
             if name in ("self", "cls"):
                 continue
-            ann = hints.get(name, p.annotation)
-            required = p.default is empty
-            item: dict[str, object] = {
-                "name": name,
-                "type": self._format_annotation(ann),
-                "required": required,
-                "description": "",
-            }
-            if not required:
-                item["default"] = p.default
-            params.append(item)
 
-        doc = inspect.getdoc(fn) or ""
-        # short description: first paragraph (up to first blank line)
-        short = ""
-        if doc:
-            parts = re.split(r"\n\s*\n", doc.strip(), maxsplit=1)
-            short = parts[0].strip()
-        return {"parameters": params, "docstring": doc, "short_description": short}
+            # 型注釈の取得と解析
+            annotation = hints.get(name, param.annotation)
+            try:
+                type_info = self._analyze_type_annotation(annotation)
+            except ValueError as e:
+                # 未サポート型の場合はエラーを再発生
+                msg = f"引数 '{name}' の型が未サポートです: {e}"
+                raise ValueError(msg) from e
+
+            # docstringからの情報取得
+            docstring_arg_info = docstring_info["args"].get(name, {})
+
+            arg_info = {
+                "name": name,
+                "type_info": type_info,
+                "required": param.default is empty,
+                "description": docstring_arg_info.get("description", ""),
+                "docstring_type": docstring_arg_info.get("type_name", ""),
+            }
+
+            if param.default is not empty:
+                arg_info["default"] = param.default
+
+            args_info.append(arg_info)
+
+        # 戻り値情報の構築
+        return_annotation = hints.get("return", sig.return_annotation)
+        try:
+            return_type_info = self._analyze_type_annotation(return_annotation)
+        except ValueError as e:
+            msg = f"戻り値の型が未サポートです: {e}"
+            raise ValueError(msg) from e
+
+        return_info = {
+            "type_info": return_type_info,
+            "description": docstring_info["returns"]["description"],
+            "docstring_type": docstring_info["returns"]["type_name"],
+        }
+
+        return {
+            "name": getattr(fn, "__name__", "unknown"),
+            "description": docstring_info["description"],
+            "args": args_info,
+            "returns": return_info,
+        }
 
     @final
     def has_tool(self, tool_name: str) -> bool:
@@ -244,7 +380,7 @@ class BaseTool:
 
 if __name__ == "__main__":
 
-    class MyTool(BaseTool):
+    class MyToolV2(BaseTool):
         @tool(use_docstring=True)
         def add(self, x: int, y: int) -> int:
             """
@@ -260,64 +396,91 @@ if __name__ == "__main__":
             return x + y
 
         @tool(use_docstring=True)
-        def multiply(self, a: float, b: float) -> float:
+        def process_list(self, items: list[str], count: int | None = None) -> list[str]:
             """
-            2つの浮動小数点数を乗算します。
+            文字列リストを処理します。
 
             Args:
-                a (float): 乗算する最初の浮動小数点数
-                b (float): 乗算する2番目の浮動小数点数
+                items (list[str]): 処理対象の文字列リスト
+                count (Optional[int]): 処理する最大件数
 
             Returns:
-                float: 乗算結果
+                list[str]: 処理済みの文字列リスト
             """
-            return a * b
+            result = [item.upper() for item in items]
+            if count is not None:
+                result = result[:count]
+            return result
 
         @tool(use_docstring=True)
-        def get_x(self) -> int:
+        def select_option(self, mode: Literal["fast", "normal", "slow"]) -> str:
             """
-            xの値を取得します。
+            動作モードを選択します。
+
+            Args:
+                mode (Literal["fast", "normal", "slow"]): 動作モード
 
             Returns:
-                int: xの値
+                str: 選択されたモードの説明
             """
-            return 42
+            modes = {
+                "fast": "高速モード",
+                "normal": "通常モード",
+                "slow": "低速モード",
+            }
+            return modes[mode]
 
         @tool(use_docstring=True)
-        def test_all_types(self, name: str, count: int, price: float, is_active: bool, items: list, config: dict) -> str:  # noqa: FBT001, PLR0913
+        def process_config(self, config: dict[str, int]) -> dict[str, str]:
             """
-            全ての基本型をテストします。
+            設定辞書を処理します。
 
             Args:
-                name (str): 名前文字列
-                count (int): カウント整数
-                price (float): 価格浮動小数点数
-                is_active (bool): アクティブフラグ
-                items (list): アイテムリスト
-                config (dict): 設定辞書
+                config (dict[str, int]): 設定値の辞書
 
             Returns:
-                str: テスト結果
+                dict[str, str]: 処理済み設定辞書
             """
-            return f"Test completed: {name}, {count}, {price}, {is_active}, {len(items)}, {len(config)}"
+            return {k: f"processed_{v}" for k, v in config.items()}
 
-        def divide(self, a: float, b: float) -> float:
-            """
-            2つの浮動小数点数を除算します。
+        @tool(use_docstring=True)
+        def process_data(self, data: list[dict[str, int]]) -> str:  # noqa: ARG002
+            return ""
 
-            Args:
-                a (float): 除算する最初の浮動小数点数
-                b (float): 除算する2番目の浮動小数点数
+    my_tool = MyToolV2()
 
-            Returns:
-                float: 除算結果
-            """
-            return a / b
+    print("=== ツール情報の詳細表示 ===")
+    tools = my_tool.get_tool_information()
 
-    my_tool = MyTool()
-    for t in my_tool.get_tool_information():
-        for key in t:
-            print(f"{key}: {t[key]}")
+    for tool_info in tools:
+        print(f"\n関数名: {tool_info['name']}")
+        print(f"説明: {tool_info['description']}")
 
-    result = my_tool.execute_tool("add", {"x": 3, "y": 5})
-    print(f"Result of add: {result}")
+        print("\n引数:")
+        for arg in tool_info["args"]:
+            print(f"  - {arg['name']} ({arg['type_info']})")
+            print(f"    説明: {arg['description']}")
+            print(f"    必須: {arg['required']}")
+            if "default" in arg:
+                print(f"    デフォルト: {arg['default']}")
+            if arg["docstring_type"]:
+                print(f"    docstring型: {arg['docstring_type']}")
+
+        print(f"\n戻り値: {tool_info['returns']['type_info']}")
+        if tool_info["returns"]["description"]:
+            print(f"戻り値説明: {tool_info['returns']['description']}")
+        if tool_info["returns"]["docstring_type"]:
+            print(f"戻り値docstring型: {tool_info['returns']['docstring_type']}")
+
+        print("-" * 50)
+
+    # 実行テスト
+    print("\n=== 実行テスト ===")
+    result1 = my_tool.execute_tool("add", {"x": 3, "y": 5})
+    print(f"add(3, 5) = {result1}")
+
+    result2 = my_tool.execute_tool("process_list", {"items": ["hello", "world"], "count": 1})
+    print(f"process_list(['hello', 'world'], count=1) = {result2}")
+
+    result3 = my_tool.execute_tool("select_option", {"mode": "fast"})
+    print(f"select_option('fast') = {result3}")

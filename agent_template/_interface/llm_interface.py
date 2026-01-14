@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from agent_template._type import History, LLMResponse
-from agent_template.tool.base_tool import BaseTool
+from agent_template.tool import BaseTool
 
 
 class LLMInterface(ABC):
@@ -21,14 +21,11 @@ class LLMInterface(ABC):
     async def chat_with_history(
         self,
         history: History,
-        *,
-        max_tokens: int = 1024,
     ) -> LLMResponse:
         """LLMのAPIを使用してチャット履歴に基づく応答を生成します。
 
         Args:
-            history (list[dict[str, str]]): チャット履歴のリスト。各辞書は"role"と"content"キーを含む。
-            top_p (float, optional): nucleus samplingのパラメータ（0.0-1.0）. Defaults to 1.0.
+            history (History): チャット履歴のリスト。各辞書は"role"と"content"キーを含む。
 
         Returns:
             LLMResponse: LLMからの応答を含むLLMResponseオブジェクト
@@ -38,19 +35,15 @@ class LLMInterface(ABC):
         """
 
     @abstractmethod
-    async def chat_with_history_tools(  # noqa: PLR0913
+    async def chat_with_history_tools(
         self,
         history: History,
-        *,
-        top_p: float = 1.0,
-        max_tokens: int = 1024,
         tools: list[BaseTool],
     ) -> list[LLMResponse]:
         """LLMのAPIをツール機能付きでマルチターン履歴を使用して実行します。
 
         Args:
-            history (list[dict[str, str]]): チャット履歴のリスト。各辞書は"role"と"content"キーを含む。
-            top_p (float, optional): nucleus samplingのパラメータ（0.0-1.0）. Defaults to 1.0.
+            history (History): チャット履歴のリスト。各辞書は"role"と"content"キーを含む。
             tools (list[BaseTool]): 利用可能なツールリスト
 
         Returns:

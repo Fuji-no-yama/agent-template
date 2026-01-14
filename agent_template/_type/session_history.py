@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 from .history import History
 from .statement import Statement
@@ -18,15 +19,15 @@ class SessionHistory(History):
     participant_profile: dict[str, str] | None = None  # 参加者のプロフィール
 
     def set_whose(self, whose: str) -> None:
-        self.whose = whose
+        self.whose: str = whose
         self.clean_content()  # 所有者が変わった時点でその所有者にしか見えてはいけない内容を削除
 
     def set_purpose(self, purpose: str, participant_profile: dict[str, str]) -> None:  # 目的を変更する場合
-        self.purpose = purpose
-        self.participant_profile = participant_profile
+        self.purpose: str = purpose
+        self.participant_profile: dict[str, str] = participant_profile
 
     def clean_content(self) -> None:
-        self.content = [item for item in self.content if isinstance(item, Statement)]
+        self.content: list[Statement] = [item for item in self.content if isinstance(item, Statement)]
 
     def add_user_message(self, content: str) -> None:  # override
         self.content.append(
@@ -44,21 +45,21 @@ class SessionHistory(History):
         )
 
     def get_content(self) -> list[dict]:  # override (現在の発言者に合わせて視点を変えて履歴を作成)
-        ret_list = []
+        ret_list: list[dict] = []
         ret_list.append(self._get_session_system_prompt())  # セッション用のシステムプロンプトを一番初めに追加
         for item in self.content:
             if isinstance(item, Statement):
                 if item.whose == self.whose:  # 発言者が所有者と同じ場合
-                    role = item.role
-                    content_type = "input_text" if role == "system" else "output_text"
-                    content = [
+                    role: Literal["user", "assistant", "system"] = item.role
+                    content_type: Literal["input_text", "output_text"] = "input_text" if role == "system" else "output_text"
+                    content: list[dict[str, str]] = [
                         {"type": content_type, "text": item.content},
                     ]
                 else:  # 発言者が所有者と異なる場合、立場を変換
                     if item.role == "system":  # 他のエージェントのシステムメッセージは無視
                         continue
                     role = "user"  # 所有者から見て他のエージェントはユーザに
-                    content = [{"type": "input_text", "text": f"({item.whose}): " + item.content}]  # 発言元を明記
+                    content: list[dict[str, str]] = [{"type": "input_text", "text": f"({item.whose}): " + item.content}]  # 発言元を明記
                 ret_list.append({"role": role, "content": content})
             else:  # LLMプロバイダから返ってきたオブジェクトの場合はそのまま追加
                 ret_list.append(item)

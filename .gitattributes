@@ -1,3 +1,0 @@
-# Dev container and VS Code settings should not be merged from dev branch
-.devcontainer/** merge=ours
-.vscode/** merge=ours

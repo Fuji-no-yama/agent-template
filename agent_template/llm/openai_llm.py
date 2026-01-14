@@ -37,12 +37,17 @@ def _llm_client() -> AsyncOpenAI:  # キャッシュを使用するためモジ�
 
 
 class OpenAILLM(LLMInterface):
-    def __init__(self, model: str | None = "gpt-4.1", temperature: float | None = 0.0) -> None:
+    def __init__(self, model: str = "gpt-4.1", temperature: float | None = 0.0) -> None:
         if model not in settings.openai_model_price:
             err_msg = f"Unsupported model: {model}. Supported models are: {list(settings.openai_model_price.keys())}"
             raise ValueError(err_msg)
-        self.model = model
-        self.temperature = temperature
+        if model in ["gpt-5-mini", "gpt-5-nano", "gpt-5-chat-latest", "gpt-5-codex", "gpt-5-pro"] and temperature is not None:
+            err_msg = "gpt-5 like models do not support temperature setting."
+            raise ValueError(err_msg)
+        if temperature is None:
+            temperature = 0.0
+        self.model: str = model
+        self.temperature: int | float = temperature
         self.output_token = 0
         self.input_token = 0
 
@@ -57,7 +62,7 @@ class OpenAILLM(LLMInterface):
         Returns:
             dict: OpenAI API用のJSON Schema
         """
-        schema = {"type": type_info["type"]}
+        schema: dict[str, Any] = {"type": type_info["type"]}
 
         # Literal型（enum）の処理
         if "enum" in type_info:
@@ -84,6 +89,9 @@ class OpenAILLM(LLMInterface):
         reraise=True,
     )
     async def _get_llm_response(self, params: dict[str, Any]) -> Response:
+        """
+        LLMからの返答を取得する内部関数
+        """
         try:
             response: Response = await _llm_client().responses.create(**params)
         except (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError) as e:
@@ -95,17 +103,14 @@ class OpenAILLM(LLMInterface):
     async def chat_with_history(
         self,
         history: History,
-        *,
-        top_p: float = 1.0,
     ) -> LLMResponse:
         params: dict[str, Any] = {
             "model": self.model,
             "input": history.get_content(),
             "temperature": self.temperature,
-            "top_p": top_p,
         }
         response: Response = await self._get_llm_response(params)
-        ret_history = history
+        ret_history: History = history
         ret_history.add_assistant_message(content=response.output_text)
         return LLMResponse(
             content=response.output_text,
@@ -116,22 +121,20 @@ class OpenAILLM(LLMInterface):
             return_history=ret_history,
         )
 
-    async def chat_with_history_tools(  # noqa: PLR0913
+    async def chat_with_history_tools(
         self,
         history: History,
-        *,
-        top_p: float = 1.0,
         tools: list[BaseTool],
     ) -> list[LLMResponse]:
-        tool_for_param = []  # ここでOpenAI API形式にツールを変換
+        tool_for_param: list[dict[str, Any]] = []  # ここでOpenAI API形式にツールを変換
         for tool_instance in tools:
-            tool_info_list = tool_instance.get_tool_information()
+            tool_info_list: list[dict[str, Any]] = tool_instance.get_tool_information()
             for tool_info in tool_info_list:
-                arg_properties = {}
-                required_args = []
+                arg_properties: dict[str, Any] = {}
+                required_args: list[str] = []
                 for arg in tool_info["args"]:
-                    type_info = arg["type_info"]
-                    property_schema = self.convert_type_info_to_schema(type_info)
+                    type_info: dict[str, Any] = arg["type_info"]
+                    property_schema: dict[str, Any] = self.convert_type_info_to_schema(type_info)
                     property_schema["description"] = arg["description"]
 
                     arg_properties[arg["name"]] = property_schema
@@ -155,11 +158,10 @@ class OpenAILLM(LLMInterface):
             "model": self.model,
             "input": history.get_content(),
             "temperature": self.temperature,
-            "top_p": top_p,
             "tools": tool_for_param,
         }
         response: Response = await self._get_llm_response(params)
-        ret_history = history
+        ret_history: History = history
         ret_response: list[LLMResponse] = []
 
         for item in response.output:
@@ -203,7 +205,7 @@ class OpenAILLM(LLMInterface):
         history = History(content=[])
         history.add_system_message(content=system_prompt)
         history.add_user_message(content=user_prompt)
-        response = asyncio.run(self.chat_with_history(history=history))
+        response: LLMResponse = asyncio.run(self.chat_with_history(history=history))
         return response.content
 
     def set_tool_result(self, history: History, tool_name: str, tool_id: str, result: str) -> History:

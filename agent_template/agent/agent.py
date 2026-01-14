@@ -35,10 +35,10 @@ class Agent:
             llm (LLMInterface): エージェントが使用するLLMインターフェース
             log_dir (os.PathLike): エージェントのログを保存するディレクトリパス
         """
-        self.name = name
-        self.who_am_i = who_am_i
-        self.llm = llm
-        self.tools = tools
+        self.name: str = name
+        self.who_am_i: str = who_am_i
+        self.llm: LLMInterface = llm
+        self.tools: list[BaseTool] = tools
         self.log_dir = Path(log_dir)
 
     def execute_task(self, task: str, *, use_log: bool = False) -> str:
@@ -55,7 +55,7 @@ class Agent:
         """
         history = History(content=[])
         if use_log:
-            logger = get_logger(self.log_dir, file_prefix="execute_task")
+            logger: Logger = get_logger(self.log_dir, file_prefix="execute_task")
             logger.info(f"[システムプロンプト]: {self.who_am_i}")
             logger.info(f"[ユーザタスク]: {task}")
         history.add_system_message(content=self.who_am_i)
@@ -76,7 +76,7 @@ class Agent:
 
         go_to_next_step = False
         if use_log:
-            logger = get_logger(self.log_dir, file_prefix="execute_complex_task")
+            logger: Logger = get_logger(self.log_dir, file_prefix="execute_complex_task")
             logger.info(f"[システムプロンプト]: {self.who_am_i}")
             logger.info(f"[ユーザタスク]: {task}")
         with (settings.data_dir / "prompt" / "complex_task_planning.prompt").open("r", encoding="utf-8") as f:
@@ -92,7 +92,7 @@ class Agent:
                     tools=self.tools,
                 ),
             )
-            history = responses[-1].return_history  # 最終の履歴を取得
+            history: History = responses[-1].return_history  # 最終の履歴を取得
             for resp in responses:
                 if not resp.is_tool_call:
                     go_to_next_step = True
@@ -105,7 +105,7 @@ class Agent:
 
     def _respond_to_history(self, history: SessionHistory, *, use_log: bool = False, logger: Logger | None = None) -> SessionHistory:
         # マルチエージェント向けに履歴に対して応答を返す関数
-        ans = self._execute_llm_loop(deepcopy(history), use_log=use_log, logger=logger)
+        ans: str = self._execute_llm_loop(deepcopy(history), use_log=use_log, logger=logger)
         history.add_assistant_message(content=ans)
         return history
 
@@ -120,18 +120,24 @@ class Agent:
                     tools=self.tools,
                 ),
             )
-            history = responses[-1].return_history  # 最終の履歴を取得
+            history: History = responses[-1].return_history  # 最終の履歴を取得
             for resp in responses:
                 if not resp.is_tool_call:
-                    logger.info(f"[実行ステップ最終応答]: {resp.content}") if use_log else None
+                    if logger:
+                        logger.info(f"[実行ステップ最終応答]: {resp.content}") if use_log else None
                     return resp.content  # 最終応答を返す
-                logger.info(f"[ツール指定]:\nname->{resp.tool_name}\nargs->{resp.tool_args}") if use_log else None
+                if logger:
+                    logger.info(f"[ツール指定]:\nname->{resp.tool_name}\nargs->{resp.tool_args}") if use_log else None
+                if resp.tool_name is None or resp.tool_id is None or resp.tool_args is None:
+                    err_msg = "Tool name or tool ID or tool args is None despite is_tool_call being True."
+                    raise ValueError(err_msg)
                 try:
-                    tool_res = self._execute_tool(resp)  # ツールを実行
+                    tool_res: str = self._execute_tool(resp)  # ツールを実行
                 except Exception as e:  # noqa: BLE001
                     tool_res = f"Exception occurred during tool ({resp.tool_name}) execution: {e}"
-                logger.info(f"[ツール結果]:\nresult->{tool_res}") if use_log else None
-                history = self.llm.set_tool_result(
+                if logger:
+                    logger.info(f"[ツール結果]:\nresult->{tool_res}") if use_log else None
+                history: History = self.llm.set_tool_result(
                     history=history,
                     tool_name=resp.tool_name,
                     tool_id=resp.tool_id,
@@ -139,6 +145,9 @@ class Agent:
                 )
 
     def _execute_tool(self, llm_response: LLMResponse) -> str:  # LLMの出力に応じてツールを実行する内部関数
+        if llm_response.tool_name is None or llm_response.tool_id is None or llm_response.tool_args is None:
+            err_msg = "Tool name or tool ID or tool args is None despite is_tool_call being True."
+            raise ValueError(err_msg)
         tool_name = llm_response.tool_name  # これは関数名
         tool_args = llm_response.tool_args
         for tool_instance in self.tools:
@@ -148,6 +157,8 @@ class Agent:
                     return tool_res
                 else:
                     return json.dumps(tool_res, ensure_ascii=False)
+        err_msg = f"Tool '{tool_name}' not found in agent's tool list."
+        raise ValueError(err_msg)
 
     def get_total_fee(self) -> float:
         """これまでのやり取りで発生した総費用を取得する。
