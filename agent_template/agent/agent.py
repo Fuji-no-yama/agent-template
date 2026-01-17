@@ -158,14 +158,14 @@ class Agent:
                 for resp in responses:
                     if not resp.is_tool_call:
                         if resp.content == "True":
-                            res = True
+                            return True
                         elif resp.content == "False":
-                            res = False
+                            return False
                         else:
-                            continue
+                            break
+                continue
             except Exception:  # noqa: BLE001
                 continue
-            return res
 
     def _execute_llm_loop(self, history: History, *, use_log: bool = False, logger: Logger | None = None) -> str:
         while True:

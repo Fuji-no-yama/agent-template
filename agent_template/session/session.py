@@ -1,9 +1,13 @@
 import json
 from logging import Logger
+from typing import TYPE_CHECKING
 
 from agent_template import Agent
 from agent_template._other.util import get_logger
 from agent_template.type.session_history import SessionHistory
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class Session:
@@ -14,7 +18,7 @@ class Session:
     def __init__(self, participants: list[Agent]) -> None:
         self.participants: list[Agent] = participants
 
-    def start_session(self, purpose: str, start_agent_name: str | None = None, *, use_log: bool = False) -> None:
+    def start_session(self, purpose: str, start_agent_name: str | None = None, *, use_log: bool = False) -> None:  # noqa: C901, PLR0912
         """
         セッションを開始する
 
@@ -39,7 +43,12 @@ class Session:
                 err_msg = f"Agent with name {start_agent_name} not found among participants."
                 raise ValueError(err_msg)
 
-        logger: Logger = get_logger(log_dir="/workspace/tmp/log", file_prefix="session")
+        log_dir: Path = self.participants[0].log_dir
+        for agent in self.participants[1:]:
+            if agent.log_dir != log_dir:
+                err_msg = "All participants must have the same log_dir."
+                raise ValueError(err_msg)
+        logger: Logger = get_logger(log_dir=log_dir, file_prefix="session")
 
         while True:
             session_history.set_whose(current_agent.name)
