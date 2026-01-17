@@ -1,6 +1,6 @@
 Look back at the conversation so far (#History) and determine whether the #Purpose has been achieved.
 
-If it has been achieved, output "True", otherwise output "False".
+If it has been achieved, output "True", otherwise output "False". Anything other than True or False should not be output, including the reason.
 
 # History
 {current_history_str}
