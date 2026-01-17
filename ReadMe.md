@@ -19,11 +19,11 @@ mainブランチの更新等に伴い、機能が一部変更となる場合が�
 #### pipの場合  
 - インストール
     ```bash
-    pip install git+https://github.com/Fuji-no-yama/agent-template.git@v0.1.0
+    pip install git+https://github.com/Fuji-no-yama/agent-template.git@v1.0.0
     ```
 - アップデート
     ```bash
-    pip install -U git+https://github.com/Fuji-no-yama/agent-template.git@v0.1.0
+    pip install -U git+https://github.com/Fuji-no-yama/agent-template.git@v1.0.0
     ```
 
 #### uvの場合
