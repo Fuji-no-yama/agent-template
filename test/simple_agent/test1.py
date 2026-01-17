@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal
 
 from agent_template import Agent, BaseTool, OpenAILLM, tool
@@ -41,12 +42,12 @@ if __name__ == "__main__":
         who_am_i="あなたは優秀な学校の先生です。生徒の名前を聞かれたら、クラスに在籍している生徒の名前を教えてください。また、生徒の成績を聞かれたら、その生徒の成績を教えてください。",
         tools=tools,
         llm=llm,
-        log_dir="./logs",
+        log_dir=Path("/workspace/tmp/log"),
     )
 
     task = "クラスに在籍している生徒の名前を教えてください。また、aliceの成績も教えてください。"
-    final_response = agent.execute_task(task=task, use_log=False)
+    final_response: str = agent.execute_task(task=task, use_log=True)
 
     print("Final Response:", final_response)
-    total_fee = agent.get_total_fee()
+    total_fee: int | float = agent.get_total_fee()
     print(f"Total Fee: ${total_fee:.6f}")

@@ -41,11 +41,13 @@ if __name__ == "__main__":
     prompt = "What is the capital of France?"
     response = asyncio.run(llm.chat_with_history(History(content=[{"role": "user", "content": prompt}])))
     print(response.content)
+    print("-----")
 
     prompt = "17345.987 * 34827.9 = ?"
+    history = History(content=[{"role": "user", "content": prompt}])
     response = asyncio.run(
         llm.chat_with_history_tools(
-            history=History().add_user_message(content=prompt),
+            history=history,
             tools=[MyTool()],
         ),
     )
@@ -53,11 +55,13 @@ if __name__ == "__main__":
         print(resp.content)
         print(resp.tool_name)
         print(resp.tool_args)
+    print("-----")
 
     prompt = "フランスの首都は?"
+    history = History(content=[{"role": "user", "content": prompt}])
     response = asyncio.run(
         llm.chat_with_history_tools(
-            history=History().add_user_message(content=prompt),
+            history=history,
             tools=[MyTool()],
         ),
     )
@@ -65,3 +69,4 @@ if __name__ == "__main__":
         print(resp.content)
         print(resp.tool_name)
         print(resp.tool_args)
+    print("-----")

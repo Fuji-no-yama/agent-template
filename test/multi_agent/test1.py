@@ -46,6 +46,10 @@ class PrincipalTool(BaseTool):
         Returns:
             bool: 卒業可能かどうか
         """
+        if sex == "female":
+            return average_score >= 70.0  # noqa: PLR2004
+        else:
+            return average_score >= 75.0  # noqa: PLR2004
 
 
 if __name__ == "__main__":
