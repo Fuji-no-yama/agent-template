@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Literal
 
 from agent_template import Agent, BaseTool, OpenAILLM, tool
 
@@ -73,7 +72,7 @@ class DataProcessingTool(BaseTool):
 
         Returns:
             dict[str, dict[str, int]]: Dictionary with student names as keys and score dictionaries for each subject as values. Example: {"Taro Yamada": {"Math": 85, "English": 90, ...}, ...}
-        """
+        """  # noqa: E501
         student_scores = {
             "Taro Yamada": {"Math": 85, "English": 90, "Science": 88},
             "Hanako Tanaka": {"Math": 92, "English": 87, "Science": 95},

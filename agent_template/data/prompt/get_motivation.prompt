@@ -1,0 +1,12 @@
+Looking back at your conversation history (#History), please quantitatively judge whether you should speak up using the following criteria and output a numerical value.
+
+- Criterion 1: How constructive can you contribute to the current conversation using the tools you have?
+
+- Criterion 2: Are other participants in the current conversation asking you to speak up?
+
+- Criterion 3: Are you spending long periods of time silent in this conversation?
+
+Evaluate each criterion on a continuous scale of 0 to 1, and add up the total to form your final output. Please provide a numerical answer only.
+
+# History
+{current_history_str}

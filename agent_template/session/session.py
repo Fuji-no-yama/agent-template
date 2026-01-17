@@ -27,14 +27,17 @@ class Session:
             participant_profile[agent.name] = agent.who_am_i
         session_history = SessionHistory(content=[], whose="", purpose=purpose, participant_profile=participant_profile)
 
+        current_agent = None
         if start_agent_name is None:
             current_agent: Agent = self.participants[0]
         else:
             for agent in self.participants:
                 if agent.name == start_agent_name:
                     current_agent: Agent = agent
-            err_msg = f"Agent with name {start_agent_name} not found among participants."
-            raise ValueError(err_msg)
+                    break
+            if current_agent is None:
+                err_msg = f"Agent with name {start_agent_name} not found among participants."
+                raise ValueError(err_msg)
 
         logger: Logger = get_logger(log_dir="/workspace/tmp/log", file_prefix="session")
 

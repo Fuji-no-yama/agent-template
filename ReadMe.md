@@ -1,6 +1,6 @@
 # Agent Template
 
-OpenAI API ネイティブなagentを作るためのライブラリです。カスタムツールを持つAIエージェントの作成と、マルチエージェントセッションでの協調作業を簡単に実現できます。
+OpenAI API ネイティブなagentを作るためのライブラリです。カスタムツールを持つAIエージェントの作成と、マルチエージェントセッションでの協調作業を実現できます。
 
 ## 特徴
 
@@ -8,26 +8,35 @@ OpenAI API ネイティブなagentを作るためのライブラリです。カ�
 - 🛠️ **柔軟なツールシステム**: デコレータベースでカスタムツールを定義
 - 👥 **マルチエージェント対応**: 複数のエージェントが協調して問題解決を行うセッション機能
 - 📊 **コスト管理**: API使用料金の追跡機能
-- 🎯 **複雑タスク対応**: 計画立案→実行の2段階処理で複雑なタスクに対応
+
+特にOpenAI Agent SDKと比較すると、**人間の対話を再現したマルチエージェントセッション**と**クラスとしてツールを構築できる点**が大きな差分となります。
 
 ## インストール
 
-### GitHubから直接インストール
+### 特定のバージョンを指定
+mainブランチの更新等に伴い、機能が一部変更となる場合があるため、バージョンを固定してインストール・更新を行うことをお勧めします。
+
+#### pipの場合  
+- インストール
+    ```bash
+    pip install git+https://github.com/Fuji-no-yama/agent-template.git@v0.1.0
+    ```
+- アップデート
+    ```bash
+    pip install -U git+https://github.com/Fuji-no-yama/agent-template.git@v0.1.0
+    ```
+
+#### uvの場合
+- インストール・アップデート
+    ```bash
+    uv add git+https://github.com/Fuji-no-yama/agent-template --tag 1.0.0
+    ```
+
+
+### GitHub mainブランチから直接インストール
 
 ```bash
 pip install git+https://github.com/Fuji-no-yama/agent-template.git
-```
-
-### 特定のバージョンを指定
-
-```bash
-pip install git+https://github.com/Fuji-no-yama/agent-template.git@v0.1.0
-```
-
-### 編集可能モードでインストール（開発用）
-
-```bash
-pip install -e git+https://github.com/Fuji-no-yama/agent-template.git#egg=agent-template
 ```
 
 ## 必要な環境変数
@@ -150,7 +159,7 @@ session.start_session(
 print(f"セッション合計費用: ${session.get_total_fee():.6f}")
 ```
 
-## 対応している型
+## ツールの詳細説明
 
 ツールの引数として以下の型をサポートしています：
 
@@ -159,6 +168,9 @@ print(f"セッション合計費用: ${session.get_total_fee():.6f}")
 - **Optional**: `Optional[T]` または `T | None`
 - **Literal**: `Literal["option1", "option2", ...]`
 - **複合型**: `list[dict[str, int]]` など
+
+**ただし、LLMがこの形の引数を生成する必要があるため、引数の型が複雑になる程、失敗する率は高くなります。**
+例えば、`list[dict[str, int]]`を引数に渡すよりかは、`list[str]`と`list[int]`の2つの引数に分割して渡した方が動作が安定します。
 
 ```python
 @tool(use_docstring=True)
@@ -236,26 +248,6 @@ agent_template/
 └── _other/         # ユーティリティ
 ```
 
-### 依存関係
-
-- `openai >= 0.8.0`
-- `pydantic >= 2.12.2`
-- `pydantic-settings >= 2.11.0`
-- `docstring-parser >= 0.17.0`
-- `tenacity >= 9.1.2`
-
-## ライセンス
-
-MIT License
-
-## 貢献
-
-1. このリポジトリをフォーク
-2. フィーチャーブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. 変更をコミット (`git commit -m 'Add some amazing feature'`)
-4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
-5. Pull Requestを作成
-
-## サポート
+## Q&A
 
 問題や質問がありましたら、[Issues](https://github.com/Fuji-no-yama/agent-template/issues) にてお気軽にお知らせください。
